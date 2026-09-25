@@ -166,7 +166,7 @@
     }
     .subj-tile .name { font-size: .78rem; font-weight: 600; }
 
-    /* ===== LỊCH XÉ PAGE ===== */
+    /* ===== LỊCH PAGE ===== */
     .exam-tabs {
       display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px;
       margin-bottom: 8px; -webkit-overflow-scrolling: touch;
@@ -448,7 +448,7 @@
     </div>
   </main>
 
-  <footer>Lịch Xé THPT · Asia/Ho_Chi_Minh</footer>
+  <footer>Lịch· Asia/Ho_Chi_Minh</footer>
 
   <div class="modal-overlay" id="previewModal">
     <div class="modal">
@@ -463,7 +463,7 @@
 
   <nav class="bottom-nav">
     <button class="active" data-page="home" onclick="goPage('home')"><span class="ico">🏠</span>Trang chủ</button>
-    <button data-page="lich" onclick="goPage('lich')"><span class="ico">📅</span>Lịch Xé</button>
+    <button data-page="lich" onclick="goPage('lich')"><span class="ico">📅</span>Lịch</button>
     <button data-page="docs" onclick="goPage('docs')"><span class="ico">📁</span>Tài liệu</button>
   </nav>
 
@@ -593,7 +593,7 @@ function openSubj(id) {
   goPage("docs");
 }
 
-/* ========== LỊCH XÉ ========== */
+/* ========== LỊCH ========== */
 function renderLich() {
   const tabs = document.getElementById("examTabs");
   tabs.innerHTML = EXAMS.map(e => {
