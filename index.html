@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <meta name="theme-color" content="#0d0d12" />
+  <title>  Học tập & Đếm ngược ngày thi</title>
+  <style>
+    /* Dark (mặc định – giống Mapstudy) */
+    :root, [data-theme="dark"] {
+      --bg: #0d0d12;
+      --bg2: #14141c;
+      --card: #1a1a26;
+      --card2: #22222f;
+      --border: #2a2a3a;
+      --text: #ffffff;
+      --muted: #9ca3af;
+      --purple: #7c5cfc;
+      --purple2: #9b7eff;
+      --teal: #2dd4bf;
+      --orange: #f97316;
+      --green: #22c55e;
+      --blue: #3b82f6;
+      --rose: #f43f5e;
+      --yellow: #eab308;
+      --hero-grad: linear-gradient(135deg, #2a1f4e 0%, #1a1a2e 50%, #16213e 100%);
+      --hero-border: #3d2f6b;
+      --sheet-grad: linear-gradient(160deg, #252536 0%, #1e1e2c 50%, #181824 100%);
+      --sheet-stack: #2a2a3a;
+      --nav-bg: #12121a;
+      --topbar-bg: rgba(13,13,18,.92);
+    }
+    /* Light */
+    [data-theme="light"] {
+      --bg: #f4f2f8;
+      --bg2: #ebe8f4;
+      --card: #ffffff;
+      --card2: #f8f7fc;
+      --border: #e2dff0;
+      --text: #1a1a2e;
+      --muted: #6b7280;
+      --purple: #6d4aed;
+      --purple2: #7c5cfc;
+      --teal: #0d9488;
+      --orange: #ea580c;
+      --green: #16a34a;
+      --blue: #2563eb;
+      --rose: #e11d48;
+      --yellow: #ca8a04;
+      --hero-grad: linear-gradient(135deg, #ede9fe 0%, #e0e7ff 50%, #fce7f3 100%);
+      --hero-border: #c4b5fd;
+      --sheet-grad: linear-gradient(160deg, #ffffff 0%, #f8f7fc 50%, #f0eef8 100%);
+      --sheet-stack: #ddd6fe;
+      --nav-bg: #ffffff;
+      --topbar-bg: rgba(255,255,255,.92);
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100dvh;
+      padding-bottom: 72px;
+      line-height: 1.45;
+    }
+    a { color: inherit; text-decoration: none; }
+
+    /* Header */
+    .topbar {
+      position: sticky; top: 0; z-index: 40;
+      background: var(--topbar-bg);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 12px 16px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .topbar .logo { font-weight: 800; font-size: 1.05rem; display: flex; align-items: center; gap: 10px; }
+    .topbar .logo img {
+      height: 36px; width: auto; border-radius: 8px;
+      object-fit: contain; flex-shrink: 0;
+    }
+    .topbar .logo span { color: var(--purple2); }
+    .btn-theme {
+      width: 40px; height: 40px; border-radius: 12px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); font-size: 1.15rem;
+      cursor: pointer; display: grid; place-items: center;
+    }
+    .btn-theme:active { opacity: .8; }
+
+    /* Bottom nav – Mapstudy style */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0; z-index: 50;
+      background: var(--nav-bg);
+      border-top: 1px solid var(--border);
+      display: flex; justify-content: space-around;
+      padding: 8px 0 calc(8px + env(safe-area-inset-bottom));
+    }
+    .bottom-nav button {
+      background: none; border: none; color: var(--muted);
+      font-size: .7rem; display: flex; flex-direction: column; align-items: center;
+      gap: 4px; padding: 4px 12px; cursor: pointer; font-weight: 600;
+    }
+    .bottom-nav button.active { color: var(--purple2); }
+    .bottom-nav .ico { font-size: 1.25rem; }
+
+    main { max-width: 560px; margin: 0 auto; padding: 16px; }
+
+    /* Pages */
+    .page { display: none; }
+    .page.active { display: block; }
+
+    /* Hero banner */
+    .hero {
+      background: var(--hero-grad);
+      border-radius: 20px; padding: 20px; margin-bottom: 20px;
+      border: 1px solid var(--hero-border); position: relative; overflow: hidden;
+    }
+    .hero .badge {
+      display: inline-block; background: var(--purple); color: #fff;
+      font-size: .7rem; font-weight: 700; padding: 3px 10px; border-radius: 6px;
+      margin-bottom: 10px;
+    }
+    .hero h2 { font-size: 1.35rem; font-weight: 800; margin-bottom: 6px; }
+    .hero p { font-size: .85rem; color: var(--muted); margin-bottom: 14px; }
+    .hero .btn-primary {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--purple); color: #fff; border: none;
+      padding: 10px 16px; border-radius: 10px; font-weight: 700;
+      font-size: .85rem; cursor: pointer;
+    }
+
+    /* Section title */
+    .sec-title {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 24px 0 12px; font-size: 1rem; font-weight: 800;
+    }
+    .sec-title .left { display: flex; align-items: center; gap: 8px; }
+    .sec-title .more { font-size: .8rem; color: var(--muted); font-weight: 600; }
+
+    /* Exam cards grid */
+    .exam-grid { display: grid; gap: 10px; }
+    .exam-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 14px; display: flex; align-items: center; gap: 12px;
+      cursor: pointer; transition: border-color .2s;
+    }
+    .exam-card:active { border-color: var(--purple); }
+    .exam-card .icon-box {
+      width: 48px; height: 48px; border-radius: 14px;
+      display: grid; place-items: center; font-size: 1.5rem; flex-shrink: 0;
+    }
+    .exam-card .info { flex: 1; min-width: 0; }
+    .exam-card .info h3 { font-size: .95rem; font-weight: 700; }
+    .exam-card .info p { font-size: .75rem; color: var(--muted); }
+    .exam-card .days { text-align: right; flex-shrink: 0; }
+    .exam-card .days .n { font-size: 1.35rem; font-weight: 800; }
+    .exam-card .days .l { font-size: .65rem; color: var(--muted); text-transform: uppercase; }
+
+    /* Subject tiles – Mapstudy colorful icons */
+    .subj-grid {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px;
+    }
+    .subj-tile {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 16px; padding: 14px 8px; text-align: center; cursor: pointer;
+    }
+    .subj-tile .ico {
+      width: 48px; height: 48px; border-radius: 14px; margin: 0 auto 8px;
+      display: grid; place-items: center; font-size: 1.4rem;
+    }
+    .subj-tile .name { font-size: .78rem; font-weight: 600; }
+
+    /* ===== LỊCH PAGE ===== */
+    .exam-tabs {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px;
+      margin-bottom: 8px; -webkit-overflow-scrolling: touch;
+    }
+    .exam-tabs button {
+      flex-shrink: 0; padding: 8px 14px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--text); font-size: .8rem; font-weight: 700; cursor: pointer;
+    }
+    .exam-tabs button.active { border-color: transparent; color: #fff; }
+
+    .meta-line { text-align: center; font-size: .8rem; color: var(--muted); margin-bottom: 12px; }
+    .meta-line strong { color: var(--text); }
+
+    .nav-row {
+      display: flex; justify-content: center; gap: 10px; margin-bottom: 14px;
+    }
+    .nav-row button {
+      padding: 8px 14px; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--card); color: var(--text); font-size: .8rem; font-weight: 600; cursor: pointer;
+    }
+
+    .sheet-wrap {
+      position: relative; width: 100%; max-width: 360px; margin: 0 auto;
+      aspect-ratio: 3/4; max-height: 460px;
+    }
+    .sheet-bg {
+      position: absolute; inset: 0; border-radius: 18px; background: var(--sheet-stack);
+    }
+    .sheet-bg.b1 { transform: translateY(8px) scale(.97); opacity: .5; }
+    .sheet-bg.b2 { transform: translateY(4px) scale(.985); opacity: .7; }
+    .sheet {
+      position: absolute; inset: 0; border-radius: 18px;
+      background: var(--sheet-grad);
+      border: 1px solid var(--border);
+      box-shadow: 0 20px 40px rgba(0,0,0,.4);
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: space-between; padding: 24px 18px 18px;
+      touch-action: none; user-select: none;
+      transition: transform .45s cubic-bezier(.4,0,.2,1), opacity .45s;
+    }
+    .sheet.tearing { transform: translateY(110%) rotate(-10deg); opacity: 0; }
+    .sheet.enter { animation: sheetIn .4s ease-out; }
+    @keyframes sheetIn {
+      from { transform: translateY(-24px) rotate(-2deg); opacity: 0; }
+      to { transform: none; opacity: 1; }
+    }
+    .dots { display: flex; gap: 5px; opacity: .35; margin-bottom: 4px; }
+    .dots i { width: 5px; height: 5px; border-radius: 50%; background: #888; display: block; }
+    .weekday { font-size: .72rem; font-weight: 700; letter-spacing: .18em; }
+    .day-num { font-size: 4.5rem; font-weight: 800; line-height: 1; letter-spacing: -2px; }
+    .month-y { font-size: 1rem; color: var(--muted); font-weight: 600; margin-top: 2px; }
+    .remain { text-align: center; margin: 10px 0; }
+    .remain .lab { font-size: .65rem; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); }
+    .remain .num { font-size: 1.9rem; font-weight: 800; }
+    .remain .sub { font-size: .8rem; color: var(--muted); }
+    .btn-tear {
+      width: 100%; padding: 13px; border: none; border-radius: 12px;
+      font-size: .95rem; font-weight: 800; color: #fff; cursor: pointer; margin-top: 6px;
+    }
+    .btn-tear:disabled { opacity: .45; }
+    .status-box {
+      width: 100%; padding: 12px; border-radius: 12px; text-align: center;
+      font-weight: 800; border: 2px solid; margin-top: 6px; font-size: .9rem;
+    }
+    .hint { font-size: .68rem; color: var(--muted); text-align: center; margin-top: 6px; }
+    .viewing { text-align: center; font-size: .75rem; color: var(--muted); margin-top: 12px; }
+
+    /* ===== TÀI LIỆU PAGE ===== */
+    .filter-row {
+      display: flex; gap: 8px; overflow-x: auto; padding-bottom: 10px;
+      margin-bottom: 12px;
+    }
+    .filter-row button {
+      flex-shrink: 0; padding: 7px 12px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--card);
+      color: var(--text); font-size: .78rem; font-weight: 600; cursor: pointer;
+    }
+    .filter-row button.active { background: var(--purple); border-color: var(--purple); color: #fff; }
+
+    .doc-list { display: flex; flex-direction: column; gap: 10px; }
+    .doc-item {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 14px; padding: 12px 14px; display: flex; align-items: center; gap: 12px;
+    }
+    .doc-item .di {
+      width: 44px; height: 44px; border-radius: 12px;
+      display: grid; place-items: center; font-size: 1.3rem; flex-shrink: 0;
+    }
+    .doc-item .meta { flex: 1; min-width: 0; }
+    .doc-item .meta h4 { font-size: .88rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .doc-item .meta p { font-size: .72rem; color: var(--muted); }
+    .doc-item .dl {
+      font-size: .75rem; color: var(--purple2); font-weight: 700; cursor: pointer; flex-shrink: 0;
+    }
+    .doc-actions {
+      display: flex; flex-direction: column; gap: 4px; flex-shrink: 0; align-items: flex-end;
+    }
+    .doc-actions button {
+      border: none; background: transparent; font-size: .72rem; font-weight: 700;
+      cursor: pointer; padding: 4px 6px; border-radius: 6px; white-space: nowrap;
+    }
+    .doc-actions .btn-view { color: var(--purple2); }
+    .doc-actions .btn-dl { color: var(--teal); }
+    .doc-actions .btn-del { color: var(--rose); }
+    .doc-actions button:active { opacity: .7; background: var(--card2); }
+
+    .upload-box {
+      margin-top: 16px; border: 2px dashed var(--border); border-radius: 16px;
+      padding: 20px; text-align: center; background: var(--card2);
+    }
+    .upload-box p { font-size: .85rem; color: var(--muted); margin-bottom: 10px; }
+    .upload-box label {
+      display: inline-block; background: var(--purple); color: #fff;
+      padding: 10px 18px; border-radius: 10px; font-weight: 700; font-size: .85rem;
+      cursor: pointer;
+    }
+    .upload-box input { display: none; }
+    .upload-note { font-size: .7rem; color: var(--muted); margin-top: 8px; }
+
+    .empty { text-align: center; padding: 32px; color: var(--muted); font-size: .9rem; }
+
+    /* Preview modal */
+    .modal-overlay {
+      display: none; position: fixed; inset: 0; z-index: 100;
+      background: rgba(0,0,0,.65); padding: 16px;
+      align-items: center; justify-content: center;
+    }
+    .modal-overlay.show { display: flex; }
+    .modal {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 18px; width: 100%; max-width: 520px; max-height: 85dvh;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+    .modal-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 14px 16px; border-bottom: 1px solid var(--border); gap: 10px;
+    }
+    .modal-head h3 { font-size: .95rem; font-weight: 700; flex: 1; min-width: 0;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .modal-close {
+      width: 36px; height: 36px; border-radius: 10px; border: 1px solid var(--border);
+      background: var(--card2); color: var(--text); font-size: 1.1rem; cursor: pointer;
+    }
+    .modal-body { padding: 16px; overflow: auto; flex: 1; font-size: .85rem; color: var(--muted); }
+    .modal-body pre {
+      white-space: pre-wrap; word-break: break-word; font-family: inherit;
+      color: var(--text); line-height: 1.5; background: var(--card2);
+      border-radius: 12px; padding: 12px; border: 1px solid var(--border);
+    }
+    .modal-body img, .modal-body iframe, .modal-body embed {
+      width: 100%; max-height: 55dvh; border-radius: 12px; border: 1px solid var(--border);
+      background: #000;
+    }
+    .modal-tags { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 12px; }
+    .modal-tags span {
+      font-size: .7rem; padding: 3px 8px; border-radius: 6px;
+      background: var(--card2); border: 1px solid var(--border); color: var(--text);
+    }
+    .doc-sec { margin-bottom: 20px; }
+    .doc-sec h3 {
+      font-size: .9rem; font-weight: 800; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .cat-badge {
+      font-size: .65rem; padding: 2px 6px; border-radius: 4px;
+      background: rgba(124,92,252,.2); color: var(--purple2); font-weight: 700;
+    }
+
+
+    footer {
+      text-align: center; padding: 20px 16px 8px; font-size: .7rem; color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="logo">
+      <img src="logo-tq.png" alt="TQ Logo" width="36" height="36" />
+      <span>Học Tập</span> THPT by TQ
+    </div>
+    <button class="btn-theme" id="btnTheme" type="button" title="Sáng / Tối" aria-label="Đổi giao diện">🌙</button>
+  </div>
+
+  <main>
+    <!-- ===== TRANG CHỦ ===== -->
+    <div class="page active" id="page-home">
+      <div class="hero">
+        <div class="badge">Học tập THPT</div>
+        <h2>đếm từng ngày đến ngày thi</h2>
+        <p>Mỗi kỳ thi một cuốn lịch riêng. Vuốt lên để xé — cảm giác như lịch để bàn.</p>
+        <button class="btn-primary" onclick="goPage('lich')">Mở Lịch→</button>
+      </div>
+
+      <div class="sec-title">
+        <div class="left">⏳ Kỳ thi sắp tới</div>
+        <span class="more" onclick="goPage('lich')" style="cursor:pointer">Xem tất cả ›</span>
+      </div>
+      <div class="exam-grid" id="homeExams"></div>
+
+      <div class="sec-title">
+        <div class="left">📚 Môn học</div>
+        <span class="more" onclick="goPage('docs')" style="cursor:pointer">Tài liệu ›</span>
+      </div>
+      <div class="subj-grid" id="homeSubj"></div>
+    </div>
+
+    <!-- ===== LỊCH ===== -->
+    <div class="page" id="page-lich">
+      <div class="sec-title" style="margin-top:0">
+        <div class="left">📅 Xé Lịch đến ngày thi</div>
+      </div>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:12px">Chọn kỳ thi bên dưới — mỗi kỳ một lịch riêng</p>
+
+      <div class="exam-tabs" id="examTabs"></div>
+      <div class="meta-line" id="examMeta"></div>
+      <div class="nav-row">
+        <button id="btnPrev">← Trước</button>
+        <button id="btnToday">Hôm nay</button>
+        <button id="btnNext">Sau →</button>
+      </div>
+      <div class="sheet-wrap">
+        <div class="sheet-bg b1"></div>
+        <div class="sheet-bg b2"></div>
+        <div class="sheet" id="sheet"></div>
+      </div>
+      <p class="viewing" id="viewing"></p>
+    </div>
+
+    <!-- ===== TÀI LIỆU ===== -->
+    <div class="page" id="page-docs">
+      <div class="sec-title" style="margin-top:0">
+        <div class="left">📁 Tài liệu học tập</div>
+      </div>
+      <p style="font-size:.8rem;color:var(--muted);margin-bottom:10px">Chọn kỳ thi để xem nhóm môn chính thức · Lọc theo môn bên dưới</p>
+      <div class="filter-row" id="examDocFilters" style="margin-bottom:8px"></div>
+      <div id="examSubjGuide" style="margin-bottom:14px"></div>
+      <div class="filter-row" id="docFilters"></div>
+      <div class="doc-list" id="docList"></div>
+
+      <div class="upload-box">
+        <p style="font-weight:700;color:var(--text);margin-bottom:8px">📤 Upload tài liệu</p>
+        <p style="margin-bottom:12px">Chọn <b style="color:var(--text)">môn</b> + <b style="color:var(--text)">loại</b> (đề thi, tóm tắt…) rồi tải file</p>
+        <div style="display:grid;gap:10px;margin-bottom:12px;text-align:left">
+          <div>
+            <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Môn học</div>
+            <select id="uploadSubject" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;font-weight:600">
+              <option value="toan">📐 Toán</option>
+              <option value="ly">⚛️ Vật lý</option>
+              <option value="hoa">🧪 Hóa học</option>
+              <option value="anh">🇬🇧 Tiếng Anh</option>
+              <option value="van">📖 Ngữ văn</option>
+              <option value="sinh">🧬 Sinh học</option>
+              <option value="su">🏛️ Lịch sử</option>
+              <option value="dia">🌍 Địa lý</option>
+              <option value="tin">💻 Tin học</option>
+            </select>
+          </div>
+          <div>
+            <div style="font-size:.75rem;color:var(--muted);margin-bottom:6px">Loại tài liệu</div>
+            <select id="uploadCategory" style="width:100%;padding:10px 12px;border-radius:10px;border:1px solid var(--border);background:var(--card);color:var(--text);font-size:.85rem;font-weight:600">
+              <option value="de-thi">Đề thi</option>
+              <option value="de-cuong">Đề cương</option>
+              <option value="tom-tat">Tóm tắt</option>
+              <option value="bai-tap">Bài tập</option>
+              <option value="tu-vung">Từ vựng / Ghi chú</option>
+              <option value="khac">Khác</option>
+            </select>
+          </div>
+        </div>
+        <div class="type-chips" style="display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-bottom:14px">
+          <span style="font-size:.68rem;padding:4px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border)">PDF</span>
+          <span style="font-size:.68rem;padding:4px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border)">DOC / DOCX</span>
+          <span style="font-size:.68rem;padding:4px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border)">PPT / PPTX</span>
+          <span style="font-size:.68rem;padding:4px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border)">XLS / XLSX</span>
+          <span style="font-size:.68rem;padding:4px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border)">JPG / PNG</span>
+          <span style="font-size:.68rem;padding:4px 8px;border-radius:6px;background:var(--card);border:1px solid var(--border)">ZIP</span>
+        </div>
+        <label>
+          + Chọn file tải lên
+          <input type="file" id="fileInput" accept=".pdf,.doc,.docx,.ppt,.pptx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt" multiple />
+        </label>
+        <p class="upload-note">Hỗ trợ: PDF, Word, PowerPoint, Excel, ảnh, ZIP. File lưu trên máy bạn (trình duyệt). Có thể nối server/Supabase khi cần.</p>
+      </div>
+    </div>
+  </main>
+
+  <footer>Lịch· Asia/Ho_Chi_Minh</footer>
+
+  <div class="modal-overlay" id="previewModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="previewTitle">Xem trước</h3>
+        <div id="previewActions" style="display:flex;gap:6px;align-items:center"></div>
+        <button class="modal-close" type="button" id="previewClose">✕</button>
+      </div>
+      <div class="modal-body" id="previewBody"></div>
+    </div>
+  </div>
+
+  <nav class="bottom-nav">
+    <button class="active" data-page="home" onclick="goPage('home')"><span class="ico">🏠</span>Trang chủ</button>
+    <button data-page="lich" onclick="goPage('lich')"><span class="ico">📅</span>Lịch</button>
+    <button data-page="docs" onclick="goPage('docs')"><span class="ico">📁</span>Tài liệu</button>
+  </nav>
+
+<script>
+/* ========== DATA ========== */
+const EXAMS = [
+  { id: "hsa-2027", name: "Đánh giá năng lực HSA 2027", shortName: "HSA 2027", examDate: "2027-04-20", examTime: "08:00", icon: "📝", color: "#22c55e", bg: "rgba(34,197,94,.18)", round: "Đợt 1" },
+  { id: "tsa-2027", name: "Đánh giá tư duy TSA 2027", shortName: "TSA 2027", examDate: "2027-05-15", examTime: "08:00", icon: "🧠", color: "#3b82f6", bg: "rgba(59,130,246,.18)", round: "Đợt 1" },
+  { id: "hsca-2027", name: "HSCA 2027", shortName: "HSCA 2027", examDate: "2027-05-28", examTime: "08:00", icon: "📘", color: "#14b8a6", bg: "rgba(20,184,166,.18)", round: "Đợt 1" },
+  { id: "spt-2027", name: "SPT 2027", shortName: "SPT 2027", examDate: "2027-06-05", examTime: "08:00", icon: "📗", color: "#f43f5e", bg: "rgba(244,63,94,.18)", round: "Chính thức" },
+  { id: "thpt-2027", name: "Tốt nghiệp THPT 2027", shortName: "THPT 2027", examDate: "2027-06-11", examTime: "07:30", icon: "⏳", color: "#f97316", bg: "rgba(249,115,22,.18)", round: "Chính thức" },
+  { id: "vact-2027", name: "V-ACT 2027", shortName: "V-ACT 2027", examDate: "2027-06-15", examTime: "08:00", icon: "📚", color: "#a855f7", bg: "rgba(168,85,247,.18)", round: "Chính thức" },
+  { id: "qda-2027", name: "Đánh giá năng lực QDA 2027 (Bộ Quốc phòng)", shortName: "QDA 2027", examDate: "2027-06-18", examTime: "08:00", icon: "🎖️", color: "#0ea5e9", bg: "rgba(14,165,233,.18)", round: "18–20/06" },
+];
+
+/* Môn thi theo từng kỳ (tham khảo trang chính thức) */
+const EXAM_SUBJECTS = {
+  "thpt-2027": {
+    label: "THPT Quốc gia",
+    note: "2 bắt buộc + 2 tự chọn",
+    subjects: ["toan", "van", "ly", "hoa", "sinh", "su", "dia", "anh", "tin"],
+    groups: [
+      { name: "Bắt buộc", ids: ["toan", "van"] },
+      { name: "Tự chọn phổ biến (A00/B00/D01…)", ids: ["ly", "hoa", "sinh", "anh", "su", "dia", "tin"] }
+    ]
+  },
+  "hsa-2027": {
+    label: "HSA (ĐHQG Hà Nội)",
+    note: "Toán + Văn + Khoa học/Anh",
+    subjects: ["toan", "van", "ly", "hoa", "sinh", "su", "dia", "anh"],
+    groups: [
+      { name: "Bắt buộc", ids: ["toan", "van"] },
+      { name: "Phần 3 – Khoa học (chọn 3/5) hoặc Tiếng Anh", ids: ["ly", "hoa", "sinh", "su", "dia", "anh"] }
+    ]
+  },
+  "tsa-2027": {
+    label: "TSA (Bách khoa Hà Nội)",
+    note: "Tư duy Toán · Đọc hiểu · Khoa học",
+    subjects: ["toan", "van", "ly", "hoa", "sinh"],
+    groups: [
+      { name: "Tư duy Toán học", ids: ["toan"] },
+      { name: "Tư duy Đọc hiểu", ids: ["van"] },
+      { name: "Tư duy Khoa học / Giải quyết vấn đề", ids: ["ly", "hoa", "sinh"] }
+    ]
+  },
+  "hsca-2027": {
+    label: "HSCA (ĐGNL chuyên biệt)",
+    note: "Thi theo từng môn chuyên biệt",
+    subjects: ["toan", "ly", "hoa", "sinh", "van", "anh"],
+    groups: [
+      { name: "Môn chuyên biệt", ids: ["toan", "ly", "hoa", "sinh", "van", "anh"] }
+    ]
+  },
+  "spt-2027": {
+    label: "SPT (Sư phạm Hà Nội)",
+    note: "12 môn, chọn 3–6 bài",
+    subjects: ["toan", "van", "anh", "ly", "hoa", "sinh", "su", "dia", "tin"],
+    groups: [
+      { name: "Toán · Văn · Anh", ids: ["toan", "van", "anh"] },
+      { name: "Khoa học tự nhiên", ids: ["ly", "hoa", "sinh"] },
+      { name: "Khoa học xã hội & Tin", ids: ["su", "dia", "tin"] }
+    ]
+  },
+  "vact-2027": {
+    label: "V-ACT (ĐHQG TP.HCM)",
+    note: "Ngôn ngữ + Toán + Tư duy khoa học",
+    subjects: ["van", "anh", "toan", "ly", "hoa", "sinh"],
+    groups: [
+      { name: "Sử dụng ngôn ngữ", ids: ["van", "anh"] },
+      { name: "Toán học", ids: ["toan"] },
+      { name: "Tư duy khoa học", ids: ["ly", "hoa", "sinh"] }
+    ]
+  },
+  "qda-2027": {
+    label: "QDA (Bộ Quốc phòng)",
+    note: "Toán + Văn + Khoa học/Anh · 18–20/06/2027 (muộn nhất 21/06)",
+    subjects: ["toan", "van", "ly", "hoa", "sinh", "su", "dia", "anh"],
+    groups: [
+      { name: "Bắt buộc", ids: ["toan", "van"] },
+      { name: "Phần 3 – Khoa học (Lý–Hóa / Hóa–Sinh / Lý–Sinh / Sử–Địa) hoặc Tiếng Anh", ids: ["ly", "hoa", "sinh", "su", "dia", "anh"] }
+    ]
+  }
+};
+
+const SUBJECTS = [
+  { id: "toan", name: "Toán", icon: "📐", color: "#3b82f6", bg: "rgba(59,130,246,.25)" },
+  { id: "ly", name: "Vật lý", icon: "⚛️", color: "#a855f7", bg: "rgba(168,85,247,.25)" },
+  { id: "hoa", name: "Hóa học", icon: "🧪", color: "#22c55e", bg: "rgba(34,197,94,.25)" },
+  { id: "anh", name: "Tiếng Anh", icon: "🇬🇧", color: "#f43f5e", bg: "rgba(244,63,94,.25)" },
+  { id: "van", name: "Ngữ văn", icon: "📖", color: "#f97316", bg: "rgba(249,115,22,.25)" },
+  { id: "sinh", name: "Sinh học", icon: "🧬", color: "#14b8a6", bg: "rgba(20,184,166,.25)" },
+  { id: "su", name: "Lịch sử", icon: "🏛️", color: "#eab308", bg: "rgba(234,179,8,.25)" },
+  { id: "dia", name: "Địa lý", icon: "🌍", color: "#06b6d4", bg: "rgba(6,182,212,.25)" },
+  { id: "tin", name: "Tin học", icon: "💻", color: "#6366f1", bg: "rgba(99,102,241,.25)" },
+];
+
+const DOC_CATEGORIES = [
+  { id: "de-thi", name: "Đề thi" },
+  { id: "de-cuong", name: "Đề cương" },
+  { id: "tom-tat", name: "Tóm tắt" },
+  { id: "bai-tap", name: "Bài tập" },
+  { id: "tu-vung", name: "Từ vựng / Ghi chú" },
+  { id: "khac", name: "Khác" },
+];
+
+const DEMO_DOCS = [];
+
+const WEEKDAYS = ["CHỦ NHẬT","THỨ HAI","THỨ BA","THỨ TƯ","THỨ NĂM","THỨ SÁU","THỨ BẢY"];
+
+/* ========== DATE ========== */
+function vnNow() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Ho_Chi_Minh" }));
+}
+function sod(d) { const x = new Date(d); x.setHours(0,0,0,0); return x; }
+function parseDate(s) {
+  const [y,m,d] = s.split("-").map(Number);
+  return sod(new Date(y, m-1, d));
+}
+function remDays(examDate, sel) {
+  return Math.round((parseDate(examDate) - sod(sel)) / 86400000);
+}
+function fmt(d) {
+  return String(d.getDate()).padStart(2,"0") + "/" + String(d.getMonth()+1).padStart(2,"0") + "/" + d.getFullYear();
+}
+function iso(d) {
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+function addD(d, n) { const x = sod(d); x.setDate(x.getDate()+n); return x; }
+function same(a,b) {
+  return a.getFullYear()===b.getFullYear() && a.getMonth()===b.getMonth() && a.getDate()===b.getDate();
+}
+
+/* ========== STATE ========== */
+let currentExamId = EXAMS[0].id;
+let selectedDate = sod(vnNow());
+let isTearing = false;
+let docFilter = "";
+let examDocFilter = ""; // filter by exam for subject guide + docs
+let userDocs = [];
+
+try { userDocs = JSON.parse(localStorage.getItem("lichxe_docs") || "[]"); } catch {}
+
+function getExam() { return EXAMS.find(e => e.id === currentExamId); }
+
+function initDate() {
+  const exam = getExam();
+  const examD = parseDate(exam.examDate);
+  const today = sod(vnNow());
+  let map = {};
+  try { map = JSON.parse(localStorage.getItem("lichxe_viewed") || "{}"); } catch {}
+  if (map[exam.id]) {
+    const d = parseDate(map[exam.id]);
+    selectedDate = d > examD ? examD : d;
+  } else {
+    selectedDate = today > examD ? examD : today;
+  }
+}
+
+/* ========== NAV ========== */
+function goPage(name) {
+  document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
+  document.getElementById("page-" + name).classList.add("active");
+  document.querySelectorAll(".bottom-nav button").forEach(b => {
+    b.classList.toggle("active", b.dataset.page === name);
+  });
+  if (name === "lich") renderLich();
+  if (name === "docs") renderDocs();
+  window.scrollTo(0, 0);
+}
+
+/* ========== HOME ========== */
+function renderHome() {
+  const sorted = [...EXAMS].sort((a,b) => remDays(a.examDate, vnNow()) - remDays(b.examDate, vnNow()));
+  document.getElementById("homeExams").innerHTML = sorted.map(e => {
+    const r = remDays(e.examDate, vnNow());
+    return `<div class="exam-card" onclick="openExam('${e.id}')">
+      <div class="icon-box" style="background:${e.bg}">${e.icon}</div>
+      <div class="info"><h3>${e.shortName}</h3><p>${e.round} · ${fmt(parseDate(e.examDate))}</p></div>
+      <div class="days">${r>=0?`<div class="n" style="color:${e.color}">${r}</div><div class="l">ngày</div>`:`<div class="l">Đã thi</div>`}</div>
+    </div>`;
+  }).join("");
+
+  document.getElementById("homeSubj").innerHTML = SUBJECTS.map(s =>
+    `<div class="subj-tile" onclick="openSubj('${s.id}')">
+      <div class="ico" style="background:${s.bg}">${s.icon}</div>
+      <div class="name">${s.name}</div>
+    </div>`
+  ).join("");
+}
+
+function openExam(id) {
+  currentExamId = id;
+  initDate();
+  goPage("lich");
+}
+function openSubj(id) {
+  docFilter = id;
+  goPage("docs");
+}
+
+/* ========== LỊCH ========== */
+function renderLich() {
+  const tabs = document.getElementById("examTabs");
+  tabs.innerHTML = EXAMS.map(e => {
+    const r = remDays(e.examDate, vnNow());
+    const on = e.id === currentExamId;
+    return `<button class="${on?"active":""}" style="${on?`background:${e.color}`:""}" onclick="selectExam('${e.id}')">${e.icon} ${e.shortName} · ${r>=0?r+"d":"✓"}</button>`;
+  }).join("");
+
+  const exam = getExam();
+  document.getElementById("examMeta").innerHTML =
+    `<strong style="color:${exam.color}">${exam.icon} ${exam.name}</strong><br/>Ngày thi: <strong>${fmt(parseDate(exam.examDate))}</strong>${exam.examTime?" · "+exam.examTime:""} · ${exam.round}`;
+
+  renderSheet(true);
+}
+
+function selectExam(id) {
+  currentExamId = id;
+  initDate();
+  renderLich();
+}
+
+function renderSheet(anim) {
+  const exam = getExam();
+  const examD = parseDate(exam.examDate);
+  const today = sod(vnNow());
+  const rem = remDays(exam.examDate, selectedDate);
+  const isExam = same(selectedDate, examD);
+  const isPast = selectedDate > examD;
+  const isToday = same(selectedDate, today);
+  const sheet = document.getElementById("sheet");
+  const dots = "<div class='dots'>" + "<i></i>".repeat(14) + "</div>";
+
+  let html = "";
+  if (isExam) {
+    html = `${dots}
+      <p class="weekday" style="color:${exam.color}">🎯 NGÀY THI</p>
+      <div style="text-align:center;flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div class="day-num" style="color:${exam.color}">${selectedDate.getDate()}</div>
+        <div class="month-y">THÁNG ${selectedDate.getMonth()+1} · ${selectedDate.getFullYear()}</div>
+        <p style="margin-top:12px;font-weight:700;font-size:.85rem;color:${exam.color}">${exam.name}</p>
+        <p style="margin-top:8px;display:inline-block;padding:4px 12px;border-radius:999px;background:${exam.color};color:#fff;font-size:.72rem;font-weight:800">🔔 HÔM NAY THI</p>
+      </div>
+      <div class="status-box" style="border-color:${exam.color};color:${exam.color}">🎯 ĐÃ ĐẾN NGÀY THI</div>
+      <p class="hint">Không thể xé tiếp</p>`;
+  } else if (isPast) {
+    html = `${dots}
+      <p class="weekday" style="color:var(--muted)">✅ ĐÃ DIỄN RA</p>
+      <div style="text-align:center;flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div class="day-num" style="color:var(--muted)">${selectedDate.getDate()}</div>
+        <div class="month-y">THÁNG ${selectedDate.getMonth()+1} · ${selectedDate.getFullYear()}</div>
+      </div>
+      <div class="status-box" style="border-color:var(--muted);color:var(--muted);border-style:dashed">Kỳ thi đã diễn ra</div>`;
+  } else {
+    html = `${dots}
+      <p class="weekday">${WEEKDAYS[selectedDate.getDay()]}</p>
+      <div style="text-align:center;flex:1;display:flex;flex-direction:column;justify-content:center">
+        <div class="day-num">${selectedDate.getDate()}</div>
+        <div class="month-y">THÁNG ${selectedDate.getMonth()+1} · ${selectedDate.getFullYear()}</div>
+        <div class="remain">
+          <div class="lab">Còn</div>
+          <div class="num" style="color:${exam.color}">${rem}</div>
+          <div class="sub">ngày đến ${exam.shortName}</div>
+        </div>
+      </div>
+      <div style="font-size:.85rem;color:var(--muted)">${exam.icon} ${exam.shortName}</div>
+      <button class="btn-tear" id="btnTear" style="background:${exam.color}">✕  XÉ LỊCH</button>
+      <p class="hint">Vuốt lên để xé · Vuốt xuống để quay lại</p>`;
+  }
+
+  sheet.innerHTML = html;
+  sheet.classList.remove("tearing");
+  if (anim) { sheet.classList.remove("enter"); void sheet.offsetWidth; sheet.classList.add("enter"); }
+  const tb = document.getElementById("btnTear");
+  if (tb) tb.onclick = tearNext;
+
+  document.getElementById("viewing").textContent = "Đang xem: " + fmt(selectedDate) + (isToday ? " (Hôm nay)" : "");
+
+  let map = {};
+  try { map = JSON.parse(localStorage.getItem("lichxe_viewed") || "{}"); } catch {}
+  map[exam.id] = iso(selectedDate);
+  localStorage.setItem("lichxe_viewed", JSON.stringify(map));
+}
+
+function canTear() { return remDays(getExam().examDate, selectedDate) > 0; }
+function tearNext() {
+  if (!canTear() || isTearing) return;
+  isTearing = true;
+  document.getElementById("sheet").classList.add("tearing");
+  setTimeout(() => { selectedDate = addD(selectedDate, 1); isTearing = false; renderSheet(true); }, 450);
+}
+function goPrev() { if (isTearing) return; selectedDate = addD(selectedDate, -1); renderSheet(true); }
+function goToday() {
+  const examD = parseDate(getExam().examDate);
+  const today = sod(vnNow());
+  selectedDate = today > examD ? examD : today;
+  renderSheet(true);
+}
+
+document.getElementById("btnPrev").onclick = goPrev;
+document.getElementById("btnToday").onclick = goToday;
+document.getElementById("btnNext").onclick = () => { if (canTear()) tearNext(); };
+
+(function() {
+  const sheet = document.getElementById("sheet");
+  let y0 = 0;
+  sheet.addEventListener("touchstart", e => { y0 = e.touches[0].clientY; }, { passive: true });
+  sheet.addEventListener("touchend", e => {
+    const dy = e.changedTouches[0].clientY - y0;
+    if (dy < -50) tearNext();
+    else if (dy > 50) goPrev();
+  }, { passive: true });
+})();
+
+/* ========== TÀI LIỆU ========== */
+function allDocs() {
+  return userDocs.slice();
+}
+
+function catName(id) {
+  return (DOC_CATEGORIES.find(c => c.id === id) || { name: "Khác" }).name;
+}
+
+function renderDocs() {
+  const sel = document.getElementById("uploadSubject");
+  if (sel && docFilter) sel.value = docFilter;
+
+  // Tabs kỳ thi (môn theo kỳ)
+  const examFilters = document.getElementById("examDocFilters");
+  if (examFilters) {
+    examFilters.innerHTML =
+      `<button class="${!examDocFilter?"active":""}" onclick="setExamDocFilter('')">Tất cả kỳ</button>` +
+      EXAMS.map(e => {
+        const on = examDocFilter === e.id;
+        return `<button class="${on?"active":""}" style="${on?`background:${e.color};border-color:transparent;color:#fff`:""}" onclick="setExamDocFilter('${e.id}')">${e.icon} ${e.shortName}</button>`;
+      }).join("");
+  }
+
+  // Hướng dẫn môn theo kỳ
+  const guide = document.getElementById("examSubjGuide");
+  if (guide) {
+    if (!examDocFilter) {
+      guide.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:12px 14px;font-size:.8rem;color:var(--muted)">
+        Chọn một kỳ thi ở trên để xem <b style="color:var(--text)">nhóm môn chính thức</b> (THPT · HSA · TSA · V-ACT · QDA…).<br/>
+        Ví dụ: THPT = Toán · Văn + 2 tự chọn · V-ACT = Tiếng Việt · Anh · Toán · Khoa học · QDA = Toán · Văn · Khoa học/Anh.
+      </div>`;
+    } else {
+      const info = EXAM_SUBJECTS[examDocFilter];
+      const exam = EXAMS.find(e => e.id === examDocFilter);
+      if (info && exam) {
+        let groupsHtml = info.groups.map(g => {
+          const chips = g.ids.map(id => {
+            const s = SUBJECTS.find(x => x.id === id);
+            if (!s) return "";
+            return `<button type="button" onclick="setFilter('${s.id}')" style="display:inline-flex;align-items:center;gap:4px;padding:5px 10px;border-radius:8px;border:1px solid var(--border);background:var(--card2);font-size:.75rem;font-weight:600;cursor:pointer;color:var(--text)">${s.icon} ${s.name}</button>`;
+          }).join("");
+          return `<div style="margin-top:8px"><div style="font-size:.72rem;font-weight:700;color:var(--muted);margin-bottom:6px">${g.name}</div><div style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div></div>`;
+        }).join("");
+        guide.innerHTML = `<div style="background:var(--card);border:1px solid var(--border);border-radius:14px;padding:14px;border-left:4px solid ${exam.color}">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+            <span style="font-size:1.2rem">${exam.icon}</span>
+            <div>
+              <div style="font-weight:800;font-size:.95rem">${info.label}</div>
+              <div style="font-size:.72rem;color:var(--muted)">${info.note}</div>
+            </div>
+          </div>
+          ${groupsHtml}
+        </div>`;
+      } else {
+        guide.innerHTML = "";
+      }
+    }
+  }
+
+  // Lọc môn: nếu chọn kỳ thì chỉ hiện môn thuộc kỳ đó
+  const allowedSubj = examDocFilter && EXAM_SUBJECTS[examDocFilter]
+    ? EXAM_SUBJECTS[examDocFilter].subjects
+    : SUBJECTS.map(s => s.id);
+
+  const filters = document.getElementById("docFilters");
+  filters.innerHTML =
+    `<button class="${!docFilter?"active":""}" onclick="setFilter('')">Tất cả môn</button>` +
+    SUBJECTS.filter(s => allowedSubj.includes(s.id)).map(s =>
+      `<button class="${docFilter===s.id?"active":""}" onclick="setFilter('${s.id}')">${s.icon} ${s.name}</button>`
+    ).join("");
+
+  let list = allDocs().filter(d => !docFilter || d.subjectId === docFilter);
+  if (examDocFilter && EXAM_SUBJECTS[examDocFilter]) {
+    const allowed = EXAM_SUBJECTS[examDocFilter].subjects;
+    list = list.filter(d => allowed.includes(d.subjectId));
+  }
+
+  const el = document.getElementById("docList");
+  if (!list.length) {
+    el.innerHTML = `<div class="empty">Chưa có tài liệu${docFilter ? " môn này" : (examDocFilter ? " cho kỳ này" : "")}.<br/><span style="font-size:.8rem">Hãy upload file ở khung bên dưới.</span></div>`;
+    return;
+  }
+
+  // Nhóm theo môn
+  const order = docFilter ? [docFilter] : allowedSubj;
+  let htmlOut = "";
+  order.forEach(sid => {
+    const items = list.filter(d => d.subjectId === sid);
+    if (!items.length) return;
+    const s = SUBJECTS.find(x => x.id === sid) || { icon: "📄", name: "Khác", bg: "rgba(124,92,252,.2)" };
+    htmlOut += `<div class="doc-sec"><h3><span style="display:inline-grid;place-items:center;width:32px;height:32px;border-radius:10px;background:${s.bg}">${s.icon}</span> ${s.name} <span style="font-weight:600;color:var(--muted);font-size:.8rem">(${items.length})</span></h3>`;
+    htmlOut += items.map(d => {
+      return `<div class="doc-item">
+        <div class="di" style="background:${s.bg}">${s.icon}</div>
+        <div class="meta">
+          <h4>${escapeHtml(d.title)}</h4>
+          <p><span class="cat-badge">${catName(d.category)}</span> · ${d.type || "FILE"}${d.size ? " · " + d.size : ""}</p>
+        </div>
+        <div class="doc-actions">
+          <button type="button" class="btn-view" onclick="openPreview('${d.id}')">👁 Xem</button>
+          <button type="button" class="btn-dl" onclick="downloadFile('${d.id}')">⬇ Tải</button>
+          <button type="button" class="btn-del" onclick="deleteFile('${d.id}')">🗑 Xóa</button>
+        </div>
+      </div>`;
+    }).join("");
+    htmlOut += `</div>`;
+  });
+  el.innerHTML = htmlOut;
+}
+
+function setFilter(id) {
+  docFilter = id;
+  renderDocs();
+}
+
+function setExamDocFilter(id) {
+  examDocFilter = id;
+  if (id && EXAM_SUBJECTS[id] && docFilter && !EXAM_SUBJECTS[id].subjects.includes(docFilter)) {
+    docFilter = "";
+  }
+  renderDocs();
+}
+
+/* IndexedDB lưu file để xem trước sau khi reload */
+const DB_NAME = "lichxe_files";
+const DB_STORE = "files";
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = () => {
+      const db = req.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) db.createObjectStore(DB_STORE);
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+async function idbPut(id, blob) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).put(blob, id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+async function idbGet(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readonly");
+    const req = tx.objectStore(DB_STORE).get(id);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function idbDelete(id) {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, "readwrite");
+    tx.objectStore(DB_STORE).delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}
+
+async function downloadFile(id) {
+  const d = allDocs().find(x => x.id === id);
+  if (!d) return;
+  try {
+    const blob = await idbGet(id);
+    if (!blob) {
+      alert("Không tìm thấy file trên máy này.\nFile chỉ tải được trên trình duyệt đã từng upload.");
+      return;
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = d.title || ("tai-lieu-" + id);
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2500);
+  } catch (err) {
+    console.warn(err);
+    alert("Không tải được file.");
+  }
+}
+
+async function deleteFile(id) {
+  const d = allDocs().find(x => x.id === id);
+  if (!d) return;
+  if (!confirm("Xóa file \"" + d.title + "\"?\nKhông hoàn tác được.")) return;
+  userDocs = userDocs.filter(x => x.id !== id);
+  localStorage.setItem("lichxe_docs", JSON.stringify(userDocs));
+  try { await idbDelete(id); } catch (err) { console.warn(err); }
+  const modal = document.getElementById("previewModal");
+  if (modal) modal.classList.remove("show");
+  renderDocs();
+}
+
+async function openPreview(id) {
+  const d = allDocs().find(x => x.id === id);
+  if (!d) return;
+  const s = SUBJECTS.find(x => x.id === d.subjectId) || { name: "?" };
+  document.getElementById("previewTitle").textContent = d.title;
+  const actions = document.getElementById("previewActions");
+  const isUser = String(d.id).startsWith("u");
+  actions.innerHTML = isUser
+    ? `<button type="button" onclick="downloadFile('${d.id}')" style="border:1px solid var(--border);background:var(--card2);color:var(--teal);font-size:.72rem;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer">⬇ Tải về</button>
+       <button type="button" onclick="deleteFile('${d.id}');document.getElementById('previewModal').classList.remove('show')" style="border:1px solid var(--border);background:var(--card2);color:var(--rose);font-size:.72rem;font-weight:700;padding:6px 10px;border-radius:8px;cursor:pointer">🗑 Xóa</button>`
+    : "";
+  const body = document.getElementById("previewBody");
+  body.innerHTML = `<div class="modal-tags">
+    <span>${s.icon || ""} ${s.name}</span>
+    <span>${catName(d.category)}</span>
+    <span>${d.type || "FILE"}</span>
+    ${d.size ? `<span>${d.size}</span>` : ""}
+  </div><p style="margin-bottom:10px">Đang tải xem trước…</p>`;
+  document.getElementById("previewModal").classList.add("show");
+
+  // User file from IndexedDB
+  if (String(id).startsWith("u")) {
+    try {
+      const blob = await idbGet(id);
+      if (blob) {
+        const url = URL.createObjectURL(blob);
+        const t = (d.type || "").toLowerCase();
+        if (["jpg","jpeg","png","gif","webp"].includes(t)) {
+          body.innerHTML = body.querySelector(".modal-tags").outerHTML +
+            `<img src="${url}" alt="preview" />`;
+        } else if (t === "pdf") {
+          body.innerHTML = body.querySelector(".modal-tags").outerHTML +
+            `<iframe src="${url}#page=1" style="height:55dvh;border:none"></iframe>
+             <p style="margin-top:8px;font-size:.75rem">Nếu không xem được PDF trên điện thoại, hãy tải file bằng app hỗ trợ PDF.</p>`;
+        } else if (t === "txt") {
+          const text = await blob.text();
+          body.innerHTML = body.querySelector(".modal-tags").outerHTML +
+            `<pre>${escapeHtml(text.slice(0, 4000))}${text.length > 4000 ? "\\n\\n… (chỉ xem 1 phần đầu)" : ""}</pre>`;
+        } else {
+          body.innerHTML = body.querySelector(".modal-tags").outerHTML +
+            `<pre>File ${d.type}: xem trước đầy đủ trên máy tính (Word/Excel/PPT).\\n\\nTên: ${escapeHtml(d.title)}\\nKích thước: ${d.size || "?"}</pre>`;
+        }
+        return;
+      }
+    } catch (err) {
+      console.warn(err);
+    }
+  }
+
+  // Demo docs: text preview
+  const prev = d.preview || "Chưa có nội dung xem trước.";
+  body.innerHTML = body.querySelector(".modal-tags").outerHTML +
+    `<pre>${escapeHtml(prev)}</pre>
+     <p style="margin-top:10px;font-size:.75rem">Chỉ xem trước một phần. Ảnh / PDF / TXT xem trực tiếp tốt hơn.</p>`;
+}
+
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+document.getElementById("previewClose").onclick = () => {
+  document.getElementById("previewModal").classList.remove("show");
+};
+document.getElementById("previewModal").addEventListener("click", (e) => {
+  if (e.target.id === "previewModal") e.currentTarget.classList.remove("show");
+});
+
+document.getElementById("fileInput").addEventListener("change", async function(e) {
+  const files = Array.from(e.target.files || []);
+  if (!files.length) return;
+  const ALLOWED = ["pdf","doc","docx","ppt","pptx","xls","xlsx","jpg","jpeg","png","zip","txt"];
+  const subj = (document.getElementById("uploadSubject") || {}).value || docFilter || "toan";
+  const category = (document.getElementById("uploadCategory") || {}).value || "khac";
+  let ok = 0, skip = 0;
+  for (const f of files) {
+    const ext = (f.name.split(".").pop() || "").toLowerCase();
+    if (!ALLOWED.includes(ext)) { skip++; continue; }
+    if (f.size > 50 * 1024 * 1024) { skip++; continue; }
+    const id = "u" + Date.now() + Math.random().toString(36).slice(2, 6);
+    try { await idbPut(id, f); } catch (err) { console.warn("idb", err); }
+    userDocs.unshift({
+      id,
+      title: f.name,
+      subjectId: subj,
+      category,
+      type: ext.toUpperCase(),
+      size: f.size < 1024 * 1024
+        ? (f.size / 1024).toFixed(0) + " KB"
+        : (f.size / 1024 / 1024).toFixed(1) + " MB",
+    });
+    ok++;
+  }
+  localStorage.setItem("lichxe_docs", JSON.stringify(userDocs));
+  docFilter = subj;
+  renderDocs();
+  e.target.value = "";
+  const sName = (SUBJECTS.find(x => x.id === subj) || {}).name || subj;
+  const cName = catName(category);
+  alert("Đã thêm " + ok + " file\\nMôn: " + sName + "\\nLoại: " + cName +
+    (skip ? ("\\nBỏ qua " + skip + " file (sai định dạng hoặc >50MB)") : ""));
+});
+
+
+/* ========== THEME SÁNG / TỐI ========== */
+(function() {
+  const btn = document.getElementById("btnTheme");
+  const root = document.documentElement;
+  const meta = document.querySelector('meta[name="theme-color"]');
+  function apply(theme) {
+    root.setAttribute("data-theme", theme);
+    localStorage.setItem("lichxe_theme", theme);
+    btn.textContent = theme === "dark" ? "☀️" : "🌙";
+    if (meta) meta.setAttribute("content", theme === "dark" ? "#0d0d12" : "#f4f2f8");
+  }
+  const saved = localStorage.getItem("lichxe_theme");
+  const preferDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+  apply(saved || (preferDark ? "dark" : "dark")); // mặc định tối kiểu Mapstudy
+  btn.onclick = () => {
+    const next = root.getAttribute("data-theme") === "dark" ? "light" : "dark";
+    apply(next);
+  };
+})();
+
+/* ========== INIT ========== */
+(function() {
+  const upcoming = EXAMS.filter(e => remDays(e.examDate, vnNow()) >= 0)
+    .sort((a,b) => remDays(a.examDate, vnNow()) - remDays(b.examDate, vnNow()));
+  currentExamId = (upcoming[0] || EXAMS[0]).id;
+  initDate();
+  renderHome();
+})();
+</script>
+</body>
+</html>
