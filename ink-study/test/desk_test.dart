@@ -66,11 +66,17 @@ void main() {
       await tester.tap(find.byTooltip('Bút bi · màu và độ dày'));
       await tester.pumpAndSettle();
       expect(find.text('Màu tùy chỉnh'), findsOneWidget);
-      await tester.tap(find.text('Đỏ'));
+      await tester.tap(find.byTooltip('Đỏ'));
       await tester.pumpAndSettle();
       expect(canvas().color, const Color(0xffd54260));
+      await tester.tap(find.text('Nét đứt'));
+      await tester.pumpAndSettle();
+      expect(canvas().dashed, isTrue);
+      await tester.tap(find.byType(Slider));
+      await tester.pumpAndSettle();
+      expect(canvas().width, greaterThan(2.8));
 
-      await tester.tap(find.text('Bút chì'));
+      await tester.tap(find.byTooltip('Bút chì'));
       await tester.pumpAndSettle();
       expect(canvas().penKind, PenKind.pencil);
       expect(find.text('Màu tùy chỉnh'), findsNothing);
@@ -94,11 +100,30 @@ void main() {
       tester.view.physicalSize = const Size(690, 470);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      await tester.tap(find.text('Bút bi'));
+      expect(find.text('Gôm'), findsOneWidget);
+      expect(find.text('Chọn vùng'), findsOneWidget);
+      await tester.tap(find.byTooltip('Bút bi'));
       await tester.pumpAndSettle();
       expect(canvas().tool, Tool.pen);
       expect(canvas().penKind, PenKind.ballpoint);
       expect(canvas().color, const Color(0xffd54260));
+      expect(canvas().dashed, isTrue);
+
+      await tester.tap(find.byTooltip('Hình học'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Mũi tên'));
+      await tester.pumpAndSettle();
+      expect(canvas().tool, Tool.shape);
+      expect(
+        tester.getRect(find.byTooltip('Làm lại · Ctrl+Y')).right,
+        lessThanOrEqualTo(690),
+      );
+      await tester.tap(find.byTooltip('Kiểu nét hình'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Xanh lam'));
+      await tester.pumpAndSettle();
+      expect(canvas().tool, Tool.shape);
+      expect(canvas().color, const Color(0xff3474cf));
 
       await tester.pumpWidget(const SizedBox());
     },

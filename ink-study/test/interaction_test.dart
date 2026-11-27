@@ -2,6 +2,7 @@ import 'dart:io';
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:ink_study/assets.dart';
 import 'package:ink_study/canvas.dart';
@@ -16,7 +17,17 @@ void main() {
     final store = await tester.runAsync(
       () => InkStore.open(directory: directory),
     );
-    var document = const InkDocument();
+    var document = const InkDocument(
+      shapes: [
+        InkShape(
+          kind: ShapeKind.rectangle,
+          start: Offset(300, 170),
+          end: Offset(400, 220),
+          color: Color(0xff08796e),
+          width: 3,
+        ),
+      ],
+    );
     var tool = Tool.pen;
     final canvas = GlobalKey<InkCanvasState>();
     var edits = 0;
@@ -67,6 +78,7 @@ void main() {
     await eraser.up();
     await tester.pump();
     expect(document.strokes, hasLength(2));
+    expect(document.shapes, isEmpty);
     expect(edits, 2);
   });
 
@@ -112,6 +124,9 @@ void main() {
       var edits = 0;
       final history = <InkDocument>[];
       late VoidCallback undo;
+      late VoidCallback usePen;
+      var tool = Tool.select;
+      var quickSelections = 0;
       final canvas = GlobalKey<InkCanvasState>();
 
       await tester.pumpWidget(
@@ -120,6 +135,7 @@ void main() {
             body: StatefulBuilder(
               builder: (context, setState) {
                 undo = () => setState(() => document = history.removeLast());
+                usePen = () => setState(() => tool = Tool.pen);
                 return InkCanvas(
                   key: canvas,
                   document: document,
@@ -129,7 +145,11 @@ void main() {
                     document = next;
                     edits++;
                   }),
-                  tool: Tool.select,
+                  tool: tool,
+                  onQuickSelect: () => setState(() {
+                    tool = Tool.select;
+                    quickSelections++;
+                  }),
                   color: color,
                   width: 3,
                   penKind: PenKind.ballpoint,
@@ -227,6 +247,20 @@ void main() {
       expect(document, same(original));
       expect(canvas.currentState!.deleteSelection(), isFalse);
       expect(edits, 2);
+
+      usePen();
+      await tester.pump();
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      final quickSelection = await select();
+      await quickSelection.up();
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(quickSelections, 1);
+      expect(edits, 2);
+      expect(canvas.currentState!.deleteSelection(), isTrue);
+      await tester.pump();
+      expect(document.strokes.single, same(outside));
+      expect(document.shapes, isEmpty);
     },
   );
 }

@@ -266,6 +266,7 @@ class InkCanvas extends StatefulWidget {
     this.panMode = false,
     this.onError,
     this.documentScope,
+    this.onQuickSelect,
   });
 
   final InkDocument document;
@@ -283,6 +284,7 @@ class InkCanvas extends StatefulWidget {
   final bool panMode;
   final ValueChanged<String>? onError;
   final Object? documentScope;
+  final VoidCallback? onQuickSelect;
 
   @override
   State<InkCanvas> createState() => InkCanvasState();
@@ -320,11 +322,13 @@ class InkCanvasState extends State<InkCanvas>
   Tool? _gestureTool;
   InkDocument? _working;
   InkStroke? _activeStroke;
+  InkStrokeInput? _strokeInput;
   InkShape? _activeShape;
   _Selection? _selection;
   _GroupSelection? _groupSelection;
   InkDocument? _committedDocument;
   bool _selectingRectangle = false;
+  bool _quickSelect = false;
   bool _movingGroup = false;
   Rect? _selectionRectangle;
   Offset _groupMove = Offset.zero;
@@ -515,13 +519,13 @@ class InkCanvasState extends State<InkCanvas>
     }
   }
 
-  double _pressure(PointerEvent event) {
+  double _pressure(PointerEvent event, {double fallback = 1}) {
     if (event.kind != PointerDeviceKind.stylus &&
         event.kind != PointerDeviceKind.invertedStylus) {
       return 1;
     }
     final span = event.pressureMax - event.pressureMin;
-    if (span <= 0 || event.pressure <= 0) return 1;
+    if (span <= 0 || event.pressure <= 0) return fallback;
     return ((event.pressure - event.pressureMin) / span)
         .clamp(0.10, 1.0)
         .toDouble();
@@ -559,10 +563,18 @@ class InkCanvasState extends State<InkCanvas>
         ) ||
         event.buttons & kMiddleMouseButton != 0;
     if (!hand && !_isOnPaper(point)) return;
+    _quickSelect =
+        !hand &&
+        widget.onQuickSelect != null &&
+        event.kind == PointerDeviceKind.mouse &&
+        (event.buttons & kPrimaryMouseButton != 0) &&
+        HardwareKeyboard.instance.isShiftPressed;
     final tool = hand
         ? Tool.hand
         : event.kind == PointerDeviceKind.invertedStylus
         ? Tool.eraser
+        : _quickSelect
+        ? Tool.select
         : widget.tool;
     _pointer = event.pointer;
     _gestureTool = tool;
@@ -571,8 +583,10 @@ class InkCanvasState extends State<InkCanvas>
     _working = null;
     switch (tool) {
       case Tool.pen:
+        final input = InkStrokeInput(InkPoint(point, _pressure(event)));
+        _strokeInput = input;
         _activeStroke = InkStroke(
-          points: [InkPoint(point, _pressure(event))],
+          points: input.points,
           color: widget.color,
           width: widget.width,
           kind: widget.penKind,
@@ -594,7 +608,11 @@ class InkCanvasState extends State<InkCanvas>
         _laserFade.value = 0;
         _laser = [point];
       case Tool.select:
-        _startSelect(point);
+        if (_quickSelect) {
+          _startRectangleSelection();
+        } else {
+          _startSelect(point);
+        }
       case Tool.pdfCrop:
         if (!_startSelection(point, pdfOnly: true)) {
           _cropPage = _pageAt(point);
@@ -626,10 +644,7 @@ class InkCanvasState extends State<InkCanvas>
           _panX + event.localDelta.dx,
         );
       case Tool.pen:
-        final stroke = _activeStroke;
-        if (stroke != null && (point - last).distance >= 0.12) {
-          stroke.points.add(InkPoint(point, _pressure(event)));
-        }
+        _strokeInput?.add(InkPoint(point, _pressure(event)));
       case Tool.eraser:
         _erase(last, point);
       case Tool.shape:
@@ -667,22 +682,34 @@ class InkCanvasState extends State<InkCanvas>
     if (_pointer != event.pointer) return;
     final stroke = _activeStroke;
     final shape = _activeShape;
+    final last = _gestureLast;
+    var selectedQuickly = false;
+    final point = _onPaper(_toDocument(event.localPosition));
     if (_gestureTool == Tool.select && _gestureOrigin != null) {
-      final end = _onPaper(_toDocument(event.localPosition));
       if (_selectingRectangle) {
-        _updateSelectionRectangle(_gestureOrigin!, end);
-        _finishSelection(end);
+        _updateSelectionRectangle(_gestureOrigin!, point);
+        final draggedRectangle = _selectionRectangle != null;
+        _finishSelection(point);
+        selectedQuickly =
+            _quickSelect &&
+            draggedRectangle &&
+            (_selection != null || _groupSelection != null);
       } else if (_movingGroup) {
-        _moveGroup(end - _gestureOrigin!);
+        _moveGroup(point - _gestureOrigin!);
         _groupSelection = _groupSelection?.shift(_groupMove);
       }
     }
+    if (_gestureTool == Tool.eraser &&
+        last != null &&
+        (point - last).distanceSquared > 0.0001) {
+      _erase(last, point);
+    }
     var update = _working;
     if (stroke != null) {
-      final point = _onPaper(_toDocument(event.localPosition));
-      if ((point - stroke.points.last.position).distance > 0.2) {
-        stroke.points.add(InkPoint(point, _pressure(event)));
-      }
+      final input = _strokeInput!;
+      input.add(
+        InkPoint(point, _pressure(event, fallback: input.lastPressure)),
+      );
       update = widget.document.copyWith(
         strokes: [
           ...widget.document.strokes,
@@ -702,6 +729,7 @@ class InkCanvasState extends State<InkCanvas>
     if (_gestureTool == Tool.laser) _laserFade.forward(from: 0);
     _clearGesture();
     if (update != null) _commit(update);
+    if (selectedQuickly) widget.onQuickSelect?.call();
     _refresh();
   }
 
@@ -718,6 +746,7 @@ class InkCanvasState extends State<InkCanvas>
     _pointer = null;
     _gestureTool = null;
     _activeStroke = null;
+    _strokeInput = null;
     _activeShape = null;
     _gestureOrigin = null;
     _gestureLast = null;
@@ -726,6 +755,7 @@ class InkCanvasState extends State<InkCanvas>
     _cropPreview = null;
     _handle = null;
     _selectingRectangle = false;
+    _quickSelect = false;
     _selectionRectangle = null;
     _movingGroup = false;
     _groupMove = Offset.zero;
@@ -767,9 +797,11 @@ class InkCanvasState extends State<InkCanvas>
   void _erase(Offset start, Offset end) {
     final before = _document;
     final radius = math.max(5.0, widget.width * 1.75);
-    final after = eraseStrokes(before.strokes, start, end, radius);
-    if (!identical(before.strokes, after)) {
-      _working = before.copyWith(strokes: after);
+    final strokes = eraseStrokes(before.strokes, start, end, radius);
+    final shapes = eraseShapes(before.shapes, start, end, radius);
+    if (!identical(before.strokes, strokes) ||
+        !identical(before.shapes, shapes)) {
+      _working = before.copyWith(strokes: strokes, shapes: shapes);
     }
   }
 
@@ -856,6 +888,10 @@ class InkCanvasState extends State<InkCanvas>
         return;
       }
     }
+    _startRectangleSelection();
+  }
+
+  void _startRectangleSelection() {
     _selection = null;
     _groupSelection = null;
     _selectingRectangle = true;
@@ -1634,13 +1670,15 @@ void _paintStroke(Canvas canvas, InkStroke stroke, {Rect? view}) {
   final highlighter = stroke.kind == PenKind.highlighter;
   final pencil = stroke.kind == PenKind.pencil;
   final paint = Paint()
-    ..color = stroke.color
+    ..color = stroke.color.withValues(alpha: 1)
     ..strokeCap = StrokeCap.round;
-  final opacity = highlighter
-      ? 0.32
-      : pencil
-      ? 0.78
-      : 1.0;
+  final opacity =
+      stroke.color.a *
+      (highlighter
+          ? 0.32
+          : pencil
+          ? 0.78
+          : 1.0);
   final bounds = view == null
       ? _activeStrokeBounds(stroke)
       : inkStrokeBounds(stroke);
@@ -1662,23 +1700,81 @@ void _paintStroke(Canvas canvas, InkStroke stroke, {Rect? view}) {
     for (var index = 1; index < stroke.points.length; index++) {
       final from = stroke.points[index - 1];
       final to = stroke.points[index];
-      paint.strokeWidth = inkWidth(stroke, (from.pressure + to.pressure) / 2);
+      final radiusFrom = inkWidth(stroke, from.pressure) / 2;
+      final radiusTo = inkWidth(stroke, to.pressure) / 2;
+      final delta = to.position - from.position;
+      final distance = delta.distance;
       if (stroke.dashed) {
-        _paintSegment(
+        for (final span in inkDashSpans(distance, arc, stroke.width)) {
+          final change = radiusTo - radiusFrom;
+          _paintTaperedSegment(
+            canvas,
+            paint,
+            from.position + delta * span.start,
+            from.position + delta * span.end,
+            radiusFrom + change * span.start,
+            radiusFrom + change * span.end,
+          );
+        }
+      } else {
+        _paintTaperedSegment(
           canvas,
           paint,
           from.position,
           to.position,
-          arc,
-          stroke.width,
+          radiusFrom,
+          radiusTo,
         );
-      } else {
-        canvas.drawLine(from.position, to.position, paint);
       }
-      arc += (to.position - from.position).distance;
+      arc += distance;
     }
   }
   if (opacity < 1) canvas.restore();
+}
+
+void _paintTaperedSegment(
+  Canvas canvas,
+  Paint paint,
+  Offset from,
+  Offset to,
+  double firstRadius,
+  double lastRadius,
+) {
+  final delta = to - from;
+  final distance = delta.distance;
+  final radiusDifference = firstRadius - lastRadius;
+  if (distance <= radiusDifference.abs()) {
+    canvas.drawCircle(
+      radiusDifference >= 0 ? from : to,
+      math.max(firstRadius, lastRadius),
+      paint,
+    );
+    return;
+  }
+  if (radiusDifference.abs() < 0.01) {
+    canvas.drawLine(from, to, paint..strokeWidth = firstRadius * 2);
+    return;
+  }
+
+  // Join the tangent sides of the end circles. The resulting silhouette uses
+  // the same linear radius as the swept eraser calculation.
+  final axis = delta / distance;
+  final ratio = radiusDifference / distance;
+  final perpendicular =
+      Offset(-axis.dy, axis.dx) * math.sqrt(1 - ratio * ratio);
+  final sideA = axis * ratio + perpendicular;
+  final sideB = axis * ratio - perpendicular;
+  canvas.drawPath(
+    Path()..addPolygon([
+      from + sideA * firstRadius,
+      to + sideA * lastRadius,
+      to + sideB * lastRadius,
+      from + sideB * firstRadius,
+    ], true),
+    paint,
+  );
+  canvas.drawCircle(from, firstRadius, paint);
+  canvas.drawCircle(to, lastRadius, paint);
 }
 
 Rect _activeStrokeBounds(InkStroke stroke) {
@@ -1701,23 +1797,7 @@ void _paintSegment(
   double width,
 ) {
   final delta = to - from;
-  final distance = delta.distance;
-  if (distance < 0.0001) return;
-  final dash = math.max(5.0, width * 3);
-  final cycle = dash + math.max(3.0, width * 2);
-  var start = 0.0;
-  while (start < distance) {
-    final phase = (offset + start) % cycle;
-    final visible = phase < dash;
-    final length = visible ? dash - phase : cycle - phase;
-    final end = math.min(start + math.max(0.0001, length), distance);
-    if (visible) {
-      canvas.drawLine(
-        from + delta * (start / distance),
-        from + delta * (end / distance),
-        paint,
-      );
-    }
-    start = end;
+  for (final span in inkDashSpans(delta.distance, offset, width)) {
+    canvas.drawLine(from + delta * span.start, from + delta * span.end, paint);
   }
 }

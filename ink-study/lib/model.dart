@@ -35,6 +35,54 @@ class InkPoint {
   }
 }
 
+/// Captures rounded ink samples once, so painting, saving and cutting share
+/// the same geometry. Each new event only changes the unfinished corner.
+class InkStrokeInput {
+  InkStrokeInput(InkPoint first) : points = [first], _latest = first;
+
+  final List<InkPoint> points;
+  InkPoint? _previous;
+  InkPoint _latest;
+
+  double get lastPressure => _latest.pressure;
+
+  void add(InkPoint next) {
+    final outgoing = next.position - _latest.position;
+    if (outgoing.distanceSquared < 0.0144) return;
+    final previous = _previous;
+    if (previous != null) _roundCorner(previous, _latest, next);
+    points.add(next);
+    _previous = _latest;
+    _latest = next;
+  }
+
+  void _roundCorner(InkPoint previous, InkPoint corner, InkPoint next) {
+    final incoming = corner.position - previous.position;
+    final outgoing = next.position - corner.position;
+    final before = incoming.distance;
+    final after = outgoing.distance;
+    final turn = _dot(incoming, outgoing) / (before * after);
+    if (turn >= 0.995 || turn <= -0.80) return;
+    final trim = math.min(6.0, math.min(before, after) / 3);
+    final start = _lerpPoint(previous, corner, 1 - trim / before);
+    final end = _lerpPoint(corner, next, trim / after);
+    final steps = (trim * 1.2).ceil().clamp(2, 8);
+    points.removeLast();
+    points.add(start);
+    for (var index = 1; index < steps; index++) {
+      final fraction = index / steps;
+      points.add(
+        _lerpPoint(
+          _lerpPoint(start, corner, fraction),
+          _lerpPoint(corner, end, fraction),
+          fraction,
+        ),
+      );
+    }
+    points.add(end);
+  }
+}
+
 class InkStroke {
   const InkStroke({
     required this.points,
@@ -585,6 +633,96 @@ List<InkStroke> eraseStrokes(
   return changed ? List.unmodifiable(output) : strokes;
 }
 
+/// Visible fractions of a segment within a continuous ink dash pattern.
+Iterable<({double start, double end})> inkDashSpans(
+  double distance,
+  double offset,
+  double width,
+) sync* {
+  if (distance <= _epsilon) return;
+  final dash = math.max(5.0, width * 3);
+  final cycle = dash + math.max(3.0, width * 2);
+  var phase = offset % cycle;
+  var start = 0.0;
+  while (start < distance) {
+    final painted = phase < dash;
+    final end = math.min(start + (painted ? dash : cycle) - phase, distance);
+    if (end <= start) break;
+    if (painted) yield (start: start / distance, end: end / distance);
+    start = end;
+    phase = painted ? dash : 0.0;
+  }
+}
+
+/// Removes a shape only if the eraser sweeps a rendered part of its outline.
+List<InkShape> eraseShapes(
+  List<InkShape> shapes,
+  Offset begin,
+  Offset end,
+  double radius,
+) {
+  if (radius <= 0 || shapes.isEmpty) return shapes;
+  final sweep = Rect.fromPoints(begin, end).inflate(radius);
+  final kept = <InkShape>[];
+  for (final shape in shapes) {
+    final allowance = shape.width / 2;
+    // An arrowhead may extend outside the bounds indicated by its endpoints.
+    final outer = shape.bounds.inflate(
+      shape.kind == ShapeKind.arrow
+          ? math.max(12.0, shape.width * 5) + allowance
+          : allowance,
+    );
+    if (!_intersects(sweep, outer) ||
+        !_erasesShape(shape, begin, end, radius)) {
+      kept.add(shape);
+    }
+  }
+  return kept.length == shapes.length ? shapes : List.unmodifiable(kept);
+}
+
+bool _erasesShape(InkShape shape, Offset begin, Offset end, double radius) {
+  final edges = shapeEdges(shape);
+  final threshold = radius + shape.width / 2;
+  for (final (edgeIndex, edge) in edges.indexed) {
+    final dashed = isShapeEdgeDashed(shape, edgeIndex);
+    var length = 0.0;
+    for (var index = 1; index < edge.points.length; index++) {
+      final start = edge.points[index - 1];
+      final delta = edge.points[index] - start;
+      final distance = delta.distance;
+      if (distance <= _epsilon) continue;
+      final removed = _removedIntervals(
+        start,
+        delta,
+        begin,
+        end,
+        threshold,
+        threshold,
+      );
+      if (removed.isNotEmpty &&
+          (!dashed || _hitsDash(removed, distance, length, shape.width))) {
+        return true;
+      }
+      length += distance;
+    }
+  }
+  return false;
+}
+
+bool _hitsDash(
+  List<_Interval> removed,
+  double length,
+  double phase,
+  double width,
+) => inkDashSpans(length, phase, width).any(
+  (dash) => removed.any(
+    (interval) =>
+        math.min(dash.end, interval.end) -
+            math.max(dash.start, interval.start) >
+        _epsilon,
+  ),
+);
+
 List<InkStroke> _eraseStroke(
   InkStroke stroke,
   Offset begin,
@@ -633,7 +771,7 @@ List<InkStroke> _eraseStroke(
     }
 
     final segment = Rect.fromPoints(first.position, second.position);
-    final removed = _intersects(candidateArea, segment)
+    var removed = _intersects(candidateArea, segment)
         ? _removedIntervals(
             first.position,
             delta,
@@ -643,6 +781,11 @@ List<InkStroke> _eraseStroke(
             radius + inkWidth(stroke, second.pressure) * 0.5,
           )
         : const <_Interval>[];
+    if (stroke.dashed &&
+        removed.isNotEmpty &&
+        !_hitsDash(removed, length, stroke.phase + distance, stroke.width)) {
+      removed = const [];
+    }
 
     void keep(double start, double end) {
       if (end - start <= _epsilon) return;

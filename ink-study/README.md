@@ -5,8 +5,9 @@
 ## Sử dụng
 
 - Bấm **Ghi chú mới** hoặc dùng Ctrl+N. Kéo chuột trái hoặc dùng bút cảm ứng để viết. Lăn chuột để cuộn và giữ Ctrl khi lăn để thu phóng.
-- Bấm vào hình bút bi, bút chì hoặc bút đánh dấu để viết ngay. Bấm một ô màu để đổi mực. Mũi tên bên cạnh từng bút mở phần chỉnh nét. Chọn **Gôm** rồi kéo ngang nét viết để tẩy một đoạn.
-- Bấm **Chọn vùng**, giữ chuột trái ở khoảng trống trên giấy rồi kéo một khung qua các nét, hình, ảnh hoặc vùng PDF đã tách. Kéo bên trong khung sau khi thả chuột để di chuyển cả nhóm. Phím Delete xóa nhóm, Ctrl+Z hoàn tác và Ctrl+Y làm lại.
+- Bấm vào biểu tượng bút bi, bút chì hoặc bút đánh dấu để viết ngay. Mở mũi tên bên cạnh để xem màu, độ dày và nét đứt trên mẫu mực.
+- Dùng **Gôm** để cắt một đoạn nét viết. Quét qua cạnh đã vẽ để xóa cả hình.
+- Bấm **Chọn vùng** hoặc giữ **Shift**, rồi kéo chuột trái từ khoảng trống để khoanh qua các nét, hình, ảnh hoặc vùng PDF đã tách. Kéo bên trong khung để di chuyển cả nhóm. Phím Delete xóa nhóm, Ctrl+Z hoàn tác và Ctrl+Y làm lại.
 - Ở góc trên bên phải, nút **−** thu ứng dụng xuống thanh tác vụ, nút **□ / ❐** phóng to hoặc khôi phục kích thước. Cũng có thể nhấp đúp tên ghi chú trên thanh tiêu đề. Nhấn **F11** để viết toàn màn hình và **F11** hoặc **Esc** để trở lại. Nút **Trình bày với laser** mở chế độ trình chiếu.
 - Dùng **Chèn → PDF làm nền**. Để chỉnh sơ đồ, chọn **Chèn → Chỉnh vùng PDF**, khoanh vùng trong một trang rồi chọn **Tách vùng**. Kéo cạnh khung để giãn theo một chiều.
 - Dán ảnh với Ctrl+V. Dùng **Chọn vùng** rồi bấm vào một ảnh hoặc hình để hiện tay nắm chỉnh kích thước. Bấm chuột phải để xem các lệnh như xoay ảnh hoặc đổi kiểu cạnh của hình.

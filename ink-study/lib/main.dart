@@ -53,10 +53,30 @@ class _InkStudyAppState extends State<InkStudyApp> {
   Widget build(BuildContext context) {
     ThemeData theme(Brightness brightness) => ThemeData(
       useMaterial3: true,
-      colorScheme: ColorScheme.fromSeed(
-        seedColor: _accent,
-        brightness: brightness,
-      ),
+      colorScheme:
+          ColorScheme.fromSeed(
+            seedColor: _accent,
+            brightness: brightness,
+          ).copyWith(
+            surface: brightness == Brightness.light
+                ? const Color(0xfffcfdff)
+                : const Color(0xff19232f),
+            onSurface: brightness == Brightness.light
+                ? const Color(0xff172740)
+                : const Color(0xffe8eff7),
+            onSurfaceVariant: brightness == Brightness.light
+                ? const Color(0xff52647b)
+                : const Color(0xffb4c4d5),
+            outlineVariant: brightness == Brightness.light
+                ? const Color(0xffdce5ee)
+                : const Color(0xff354455),
+            surfaceContainerLow: brightness == Brightness.light
+                ? const Color(0xfff6f8fb)
+                : const Color(0xff202c3a),
+            surfaceContainerHighest: brightness == Brightness.light
+                ? const Color(0xffe8eff6)
+                : const Color(0xff2c3b4c),
+          ),
       fontFamily: Platform.isWindows ? 'Segoe UI' : null,
       visualDensity: VisualDensity.compact,
       tooltipTheme: const TooltipThemeData(
@@ -106,7 +126,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   final _notes = <InkNote>[];
   final _histories = <String, _History>{};
   final _filter = TextEditingController();
-  final _pens = <PenKind, (Color, double, bool)>{
+  final _pens = <PenKind, PenSettings>{
     PenKind.ballpoint: (_initialInk, 2.8, false),
     PenKind.pencil: (const Color(0xff4b637c), 2.0, false),
     PenKind.highlighter: (const Color(0xffefb531), 15.0, false),
@@ -124,6 +144,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   Tool _tool = Tool.pen;
   PenKind _pen = PenKind.ballpoint;
   ShapeKind _shape = ShapeKind.line;
+  PenSettings _shapeStyle = (_initialInk, 2.8, false);
   bool _rail = true;
   _DeskMode _mode = _DeskMode.windowed;
   Tool _beforePresentation = Tool.pen;
@@ -733,8 +754,8 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
         autofocus: true,
         child: Scaffold(
           backgroundColor: widget.dark
-              ? const Color(0xff151d24)
-              : const Color(0xffedf1f4),
+              ? const Color(0xff141f2b)
+              : const Color(0xffedf2f7),
           body: SafeArea(
             child: Column(
               children: [
@@ -829,17 +850,15 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                 icon: const Icon(Icons.view_sidebar_outlined, size: 21),
               ),
             const SizedBox(width: 4),
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: _accent,
-                borderRadius: BorderRadius.circular(9),
-              ),
-              child: const Icon(
-                Icons.draw_outlined,
-                color: Colors.white,
-                size: 20,
+            Image.asset(
+              'assets/app-icon.png',
+              width: 30,
+              height: 30,
+              excludeFromSemantics: true,
+              errorBuilder: (context, error, stackTrace) => const SizedBox(
+                width: 30,
+                height: 30,
+                child: Icon(Icons.draw_outlined, size: 21, color: _accent),
               ),
             ),
             const SizedBox(width: 8),
@@ -937,7 +956,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       }
     }
     return Material(
-      color: scheme.surface,
+      color: scheme.surfaceContainerLow,
       shape: Border(right: BorderSide(color: scheme.outlineVariant)),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1078,43 +1097,28 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       ),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final wide = constraints.maxWidth >= 1180;
-          final showLabels = constraints.maxWidth >= 660;
-          final writing = <Widget>[
-            for (final kind in PenKind.values)
-              _penButton(kind, showLabel: showLabels),
-            _eraserButton(showLabel: showLabels),
-            const SizedBox(width: 5),
-            _shelfAction(
-              Icons.crop_free_rounded,
-              'Chọn vùng',
-              'Kéo để khoanh nội dung',
-              _tool == Tool.select,
-              () => _setTool(Tool.select),
+          final showLabels = constraints.maxWidth >= 940;
+          return SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+            child: Row(
+              children: [
+                for (final kind in PenKind.values)
+                  _penButton(kind, note, showLabel: showLabels),
+                _shelfDivider(),
+                _eraserButton(),
+                const SizedBox(width: 4),
+                _shelfAction(
+                  Icons.crop_free_rounded,
+                  'Chọn vùng',
+                  'Chọn vùng · Shift + kéo để chọn nhanh',
+                  _tool == Tool.select,
+                  () => _setTool(Tool.select),
+                ),
+                _shelfDivider(),
+                ..._shelfActions(note, showLabels: showLabels),
+              ],
             ),
-            _shelfDivider(),
-            _quickColors(),
-          ];
-          final actions = _shelfActions(note);
-          Widget lane(List<Widget> children, EdgeInsets padding) =>
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                padding: padding,
-                child: Row(children: children),
-              );
-          if (wide) {
-            return lane([
-              ...writing,
-              _shelfDivider(),
-              ...actions,
-            ], const EdgeInsets.symmetric(horizontal: 12, vertical: 6));
-          }
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              lane(writing, const EdgeInsets.fromLTRB(12, 6, 12, 3)),
-              lane(actions, const EdgeInsets.fromLTRB(12, 0, 12, 4)),
-            ],
           );
         },
       ),
@@ -1123,8 +1127,8 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
 
   Widget _shelfDivider() => Container(
     width: 1,
-    height: 26,
-    margin: const EdgeInsets.symmetric(horizontal: 9),
+    height: 20,
+    margin: const EdgeInsets.symmetric(horizontal: 4),
     color: Theme.of(context).colorScheme.outlineVariant,
   );
 
@@ -1139,210 +1143,70 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     'Than',
   ];
 
-  Widget _quickColors() {
-    final scheme = Theme.of(context).colorScheme;
-    final (active, width, dashed) = _pens[_pen]!;
-    return Row(
-      children: [
-        for (var index = 0; index < _palette.length; index++)
-          Tooltip(
-            message: 'Màu nét · ${_inkNames[index]}',
-            child: Semantics(
-              selected:
-                  _palette[index] == active &&
-                  (_tool == Tool.pen || _tool == Tool.shape),
-              button: true,
-              child: InkResponse(
-                radius: 13,
-                onTap: () {
-                  if (_tool == Tool.shape) {
-                    setState(
-                      () => _pens[_pen] = (_palette[index], width, dashed),
-                    );
-                  } else {
-                    _setPen(_pen, color: _palette[index]);
-                  }
-                },
-                child: SizedBox(
-                  width: 23,
-                  height: 38,
-                  child: Center(
-                    child: Container(
-                      width: 21,
-                      height: 21,
-                      padding: const EdgeInsets.all(2),
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                          color:
-                              _palette[index] == active &&
-                                  (_tool == Tool.pen || _tool == Tool.shape)
-                              ? scheme.primary
-                              : Colors.transparent,
-                        ),
-                      ),
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: _palette[index],
-                          border: Border.all(
-                            color: scheme.outline.withValues(alpha: 0.36),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
   double _eraserSize = 20;
 
-  Widget _penButton(PenKind kind, {required bool showLabel}) {
+  Widget _penButton(PenKind kind, InkNote note, {required bool showLabel}) {
     final scheme = Theme.of(context).colorScheme;
-    final (color, width, dashed) = _pens[kind]!;
-    final label = switch (kind) {
-      PenKind.ballpoint => 'Bút bi',
-      PenKind.pencil => 'Bút chì',
-      PenKind.highlighter => 'Dạ quang',
-    };
+    final (color, _, _) = _pens[kind]!;
+    final label = penLabel(kind);
     return _shelfSplitTool(
       label: label,
-      tooltip: '$label · ${width.toStringAsFixed(1)} px',
+      tooltip: label,
       selected: _tool == Tool.pen && _pen == kind,
       showLabel: showLabel,
-      preview: ToolNibPreview(pen: kind, color: color, outline: scheme.outline),
+      preview: ToolNibPreview(
+        pen: kind,
+        color: color,
+        outline: scheme.onSurface,
+      ),
       onPressed: () => _setPen(kind),
-      options: PopupMenuButton<String>(
-        tooltip: '$label · màu và độ dày',
-        position: PopupMenuPosition.under,
-        onSelected: (choice) {
-          if (choice == 'custom') {
-            unawaited(
-              _customColor(color, (value) => _setPen(kind, color: value)),
-            );
-          } else if (choice == 'dash') {
-            _setPen(kind, dashed: !dashed);
-          } else if (choice.startsWith('width:')) {
-            _setPen(kind, width: double.parse(choice.substring(6)));
-          } else {
-            _setPen(kind, color: _palette[int.parse(choice)]);
-          }
-        },
-        itemBuilder: (_) => [
-          for (var index = 0; index < _palette.length; index++)
-            PopupMenuItem(
-              value: '$index',
-              child: Row(
-                children: [
-                  Icon(Icons.circle, color: _palette[index], size: 17),
-                  const SizedBox(width: 9),
-                  Text(_inkNames[index]),
-                  if (_palette[index] == color)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 8),
-                      child: Icon(Icons.check, size: 16),
-                    ),
-                ],
-              ),
-            ),
-          const PopupMenuItem(value: 'custom', child: Text('Màu tùy chỉnh')),
-          const PopupMenuDivider(),
-          for (final size
-              in (kind == PenKind.highlighter
-                  ? [8, 12, 15, 22, 32]
-                  : [1, 2, 3, 5, 8, 12]))
-            CheckedPopupMenuItem(
-              value: 'width:$size',
-              checked: size == width,
-              child: Text('$size px'),
-            ),
-          CheckedPopupMenuItem(
-            value: 'dash',
-            checked: dashed,
-            child: const Text('Nét đứt'),
+      options: ToolOptionsMenu(
+        label: '$label · màu và độ dày',
+        panel: PenOptionsPanel(
+          pen: kind,
+          presets: _pens,
+          colors: _palette,
+          colorNames: _inkNames,
+          paperColor: note.document.paperColor,
+          onChange: _setPen,
+          onCustomColor: (pen, current) => unawaited(
+            _customColor(current, (value) => _setPen(pen, color: value)),
           ),
-        ],
-        child: _shelfChevron(),
+        ),
       ),
     );
   }
 
-  Widget _eraserButton({required bool showLabel}) {
+  Widget _eraserButton() {
     final scheme = Theme.of(context).colorScheme;
     return _shelfSplitTool(
       label: 'Gôm',
       tooltip: 'Tẩy một phần nét',
       selected: _tool == Tool.eraser,
-      showLabel: showLabel,
-      preview: ToolNibPreview(
-        color: widget.dark ? const Color(0xffe48ba2) : const Color(0xffcb607f),
-        outline: scheme.outline,
-      ),
+      showLabel: true,
+      preview: ToolNibPreview(color: scheme.primary, outline: scheme.onSurface),
       onPressed: () => _setTool(Tool.eraser),
-      options: Tooltip(
-        message: 'Độ rộng gôm',
-        child: InkWell(
-          onTap: () => unawaited(_pickEraserSize()),
-          child: _shelfChevron(),
-        ),
-      ),
-    );
-  }
-
-  Future<void> _pickEraserSize() async {
-    var size = _eraserSize;
-    final selected = await showDialog<double>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, update) => AlertDialog(
-          title: const Text('Độ rộng gôm'),
-          content: SizedBox(
-            width: 310,
-            child: Row(
-              children: [
-                Expanded(
-                  child: Slider(
-                    min: 6,
-                    max: 54,
-                    value: size,
-                    onChanged: (value) => update(() => size = value),
-                  ),
-                ),
-                Text('${size.round()} px'),
-              ],
+      options: ToolOptionsMenu(
+        label: 'Độ rộng gôm',
+        panel: SizedBox(
+          width: 222,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 13, 14, 0),
+            child: ToolWidthSlider(
+              label: 'Độ rộng gôm',
+              value: _eraserSize,
+              min: 6,
+              max: 54,
+              onChanged: (value) => setState(() {
+                _eraserSize = value;
+                _tool = Tool.eraser;
+              }),
             ),
           ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Hủy'),
-            ),
-            FilledButton(
-              onPressed: () => Navigator.pop(context, size),
-              child: const Text('Áp dụng'),
-            ),
-          ],
         ),
       ),
     );
-    if (selected != null && mounted) {
-      setState(() {
-        _eraserSize = selected;
-        _tool = Tool.eraser;
-      });
-    }
   }
-
-  Widget _shelfChevron() => const SizedBox(
-    width: 23,
-    height: 36,
-    child: Icon(Icons.keyboard_arrow_down_rounded, size: 16),
-  );
 
   Widget _shelfSplitTool({
     required String label,
@@ -1354,17 +1218,16 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     required Widget options,
   }) {
     final scheme = Theme.of(context).colorScheme;
-    final radius = BorderRadius.circular(9);
     return Padding(
-      padding: const EdgeInsets.only(right: 5),
+      padding: const EdgeInsets.only(right: 3),
       child: Material(
-        color: selected ? scheme.primaryContainer : scheme.surfaceContainerLow,
+        color: selected ? scheme.primaryContainer : Colors.transparent,
         shape: RoundedRectangleBorder(
-          borderRadius: radius,
+          borderRadius: BorderRadius.circular(8),
           side: BorderSide(
             color: selected
-                ? scheme.primary.withValues(alpha: 0.62)
-                : scheme.outlineVariant,
+                ? scheme.primary.withValues(alpha: 0.52)
+                : Colors.transparent,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -1379,7 +1242,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                 child: InkWell(
                   onTap: onPressed,
                   child: Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 5),
+                    padding: const EdgeInsets.only(left: 5, right: 4),
                     child: SizedBox(
                       height: 36,
                       child: Row(
@@ -1403,7 +1266,6 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                 ),
               ),
             ),
-            Container(width: 1, height: 16, color: scheme.outlineVariant),
             options,
           ],
         ),
@@ -1430,11 +1292,11 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                 ? scheme.onPrimaryContainer
                 : scheme.onSurface,
             backgroundColor: selected ? scheme.primaryContainer : null,
-            padding: const EdgeInsets.symmetric(horizontal: 9),
+            padding: const EdgeInsets.symmetric(horizontal: 8),
             minimumSize: const Size(0, 36),
             tapTargetSize: MaterialTapTargetSize.shrinkWrap,
             shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(9),
+              borderRadius: BorderRadius.circular(8),
               side: BorderSide(
                 color: selected ? scheme.primary : Colors.transparent,
               ),
@@ -1447,21 +1309,37 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     );
   }
 
-  List<Widget> _shelfActions(InkNote note) {
-    final (_, _, dashed) = _pens[_pen]!;
+  void _updateShapeStyle({Color? color, double? width, bool? dashed}) {
+    final (oldColor, oldWidth, oldDash) = _shapeStyle;
+    setState(
+      () => _shapeStyle = (
+        color ?? oldColor,
+        width ?? oldWidth,
+        dashed ?? oldDash,
+      ),
+    );
+  }
+
+  List<Widget> _shelfActions(InkNote note, {required bool showLabels}) {
     return [
-      _toolButton(
-        Icons.pan_tool_outlined,
-        'Dịch giấy · Space + kéo',
-        _tool == Tool.hand,
-        () => _setTool(Tool.hand),
-      ),
-      _toolButton(
-        Icons.lens_blur,
-        'Laser',
-        _tool == Tool.laser,
-        () => _setTool(Tool.laser),
-      ),
+      if (showLabels) ...[
+        _shelfIcon(
+          _toolButton(
+            Icons.pan_tool_outlined,
+            'Dịch giấy · Space + kéo',
+            _tool == Tool.hand,
+            () => _setTool(Tool.hand),
+          ),
+        ),
+        _shelfIcon(
+          _toolButton(
+            Icons.lens_blur,
+            'Laser',
+            _tool == Tool.laser,
+            () => _setTool(Tool.laser),
+          ),
+        ),
+      ],
       PopupMenuButton<ShapeKind>(
         tooltip: 'Hình học',
         initialValue: _shape,
@@ -1476,18 +1354,28 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
         child: _menuLabel(
           Icons.category_outlined,
           'Hình',
+          showLabel: showLabels,
           selected: _tool == Tool.shape,
         ),
       ),
       if (_tool == Tool.shape)
-        IconButton(
-          tooltip: dashed ? 'Dùng nét liền' : 'Dùng nét đứt',
-          onPressed: () {
-            final (color, oldWidth, _) = _pens[_pen]!;
-            setState(() => _pens[_pen] = (color, oldWidth, !dashed));
-          },
-          isSelected: dashed,
-          icon: const Icon(Icons.more_horiz_rounded, size: 19),
+        ToolOptionsMenu(
+          label: 'Kiểu nét hình',
+          icon: Icons.tune_rounded,
+          compact: false,
+          panel: PenOptionsPanel(
+            pen: PenKind.ballpoint,
+            presets: {PenKind.ballpoint: _shapeStyle},
+            colors: _palette,
+            colorNames: _inkNames,
+            paperColor: note.document.paperColor,
+            onChange: (_, {color, width, dashed}) =>
+                _updateShapeStyle(color: color, width: width, dashed: dashed),
+            onCustomColor: (_, current) => unawaited(
+              _customColor(current, (value) => _updateShapeStyle(color: value)),
+            ),
+            forShape: true,
+          ),
         ),
       _shelfDivider(),
       PopupMenuButton<String>(
@@ -1530,28 +1418,39 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
         child: _menuLabel(
           Icons.add_circle_outline_rounded,
           'Chèn',
+          showLabel: showLabels,
           selected: _tool == Tool.pdfCrop,
         ),
       ),
       PopupMenuButton<String>(
-        tooltip: 'Nền giấy',
+        tooltip: showLabels ? 'Nền giấy' : 'Nền giấy và công cụ khác',
         onSelected: (value) {
-          if (value == 'color') {
-            unawaited(
-              _customColor(note.document.paperColor, (color) {
-                final current = _active;
-                if (current != null && current.id == note.id) {
-                  _document(current.document.copyWith(paperColor: color));
-                }
-              }),
-            );
-          } else {
-            _document(
-              note.document.copyWith(paper: PaperKind.values.byName(value)),
-            );
+          switch (value) {
+            case 'hand':
+              _setTool(Tool.hand);
+            case 'laser':
+              _setTool(Tool.laser);
+            case 'color':
+              unawaited(
+                _customColor(note.document.paperColor, (color) {
+                  final current = _active;
+                  if (current != null && current.id == note.id) {
+                    _document(current.document.copyWith(paperColor: color));
+                  }
+                }),
+              );
+            default:
+              _document(
+                note.document.copyWith(paper: PaperKind.values.byName(value)),
+              );
           }
         },
         itemBuilder: (_) => [
+          if (!showLabels) ...[
+            const PopupMenuItem(value: 'hand', child: Text('Dịch giấy')),
+            const PopupMenuItem(value: 'laser', child: Text('Laser')),
+            const PopupMenuDivider(),
+          ],
           for (final kind in PaperKind.values)
             CheckedPopupMenuItem(
               value: kind.name,
@@ -1560,43 +1459,60 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
             ),
           const PopupMenuItem(value: 'color', child: Text('Màu nền tùy chỉnh')),
         ],
-        child: _menuLabel(Icons.grid_on_outlined, 'Nền'),
+        child: _menuLabel(
+          showLabels ? Icons.grid_on_outlined : Icons.more_horiz_rounded,
+          'Nền',
+          showLabel: showLabels,
+          selected: !showLabels && (_tool == Tool.hand || _tool == Tool.laser),
+        ),
       ),
       _shelfDivider(),
-      IconButton(
-        tooltip: 'Hoàn tác · Ctrl+Z',
-        onPressed: _history?.undo.isNotEmpty == true ? _undo : null,
-        icon: const Icon(Icons.undo_rounded, size: 20),
+      _shelfIcon(
+        IconButton(
+          tooltip: 'Hoàn tác · Ctrl+Z',
+          onPressed: _history?.undo.isNotEmpty == true ? _undo : null,
+          icon: const Icon(Icons.undo_rounded, size: 19),
+        ),
       ),
-      IconButton(
-        tooltip: 'Làm lại · Ctrl+Y',
-        onPressed: _history?.redo.isNotEmpty == true
-            ? () => _undo(redo: true)
-            : null,
-        icon: const Icon(Icons.redo_rounded, size: 20),
+      _shelfIcon(
+        IconButton(
+          tooltip: 'Làm lại · Ctrl+Y',
+          onPressed: _history?.redo.isNotEmpty == true
+              ? () => _undo(redo: true)
+              : null,
+          icon: const Icon(Icons.redo_rounded, size: 19),
+        ),
       ),
     ];
   }
 
-  Widget _menuLabel(IconData icon, String label, {bool selected = false}) =>
-      Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 7),
-        decoration: BoxDecoration(
-          color: selected
-              ? Theme.of(context).colorScheme.primaryContainer
-              : null,
-          borderRadius: BorderRadius.circular(7),
-        ),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 18),
-            const SizedBox(width: 5),
-            Text(label),
-            const Icon(Icons.arrow_drop_down, size: 17),
-          ],
-        ),
-      );
+  Widget _shelfIcon(Widget button) =>
+      SizedBox(width: 35, height: 36, child: button);
+
+  Widget _menuLabel(
+    IconData icon,
+    String label, {
+    required bool showLabel,
+    bool selected = false,
+  }) => Container(
+    height: 36,
+    padding: EdgeInsets.symmetric(horizontal: showLabel ? 7 : 5),
+    decoration: BoxDecoration(
+      color: selected ? Theme.of(context).colorScheme.primaryContainer : null,
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 18),
+        if (showLabel) ...[
+          const SizedBox(width: 5),
+          Text(label),
+          const Icon(Icons.keyboard_arrow_down_rounded, size: 13),
+        ],
+      ],
+    ),
+  );
 
   Widget _toolButton(
     IconData icon,
@@ -1673,7 +1589,9 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       _view(zoom.clamp(0.25, 4.0).toDouble(), note.scroll);
 
   Widget _paper(InkNote note) {
-    final (color, width, dashed) = _pens[_pen]!;
+    final (color, width, dashed) = _tool == Tool.shape
+        ? _shapeStyle
+        : _pens[_pen]!;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1693,6 +1611,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           scroll: note.scroll,
           onViewportChanged: _view,
           onError: _toast,
+          onQuickSelect: () => _setTool(Tool.select),
         ),
         if (_tool == Tool.pdfCrop && _exportSelection == null)
           Positioned(

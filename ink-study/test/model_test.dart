@@ -135,6 +135,78 @@ void main() {
     );
   });
 
+  test('ink capture rounds a turn without changing settled samples', () {
+    const first = InkPoint(Offset.zero, 0.3);
+    const corner = InkPoint(Offset(20, 0), 0.6);
+    const next = InkPoint(Offset(20, 20), 0.8);
+    const last = InkPoint(Offset(40, 20), 1);
+    final input = InkStrokeInput(first)..add(corner);
+    expect(input.points, [first, corner]);
+
+    input.add(next);
+    expect(input.points.first, first);
+    expect(input.points.last, next);
+    expect(input.points, isNot(contains(corner)));
+    expect(input.points.sublist(2, input.points.length - 2), isNotEmpty);
+    expect(
+      collectPressures(input.points),
+      orderedEquals(collectPressures(input.points)..sort()),
+    );
+    final settled = input.points.sublist(0, input.points.length - 1);
+
+    input.add(last);
+    expect(input.points.take(settled.length), settled);
+    expect(input.points.last, last);
+
+    final stroke = InkStroke(points: input.points, color: ink, width: 2);
+    final erase = eraseStrokes(
+      [stroke],
+      const Offset(20, 0),
+      const Offset(20, 0),
+      0.4,
+    );
+    expect(
+      erase.single,
+      same(stroke),
+      reason: 'The rounded path leaves the sharp corner empty.',
+    );
+  });
+
+  test('a shape is only erased by a sweep across a painted edge', () {
+    const rectangle = InkShape(
+      kind: ShapeKind.rectangle,
+      start: Offset.zero,
+      end: Offset(100, 70),
+      color: ink,
+      width: 2,
+    );
+    final shapes = [rectangle];
+    expect(
+      eraseShapes(shapes, const Offset(50, 20), const Offset(60, 20), 3),
+      same(shapes),
+    );
+    expect(
+      eraseShapes(shapes, const Offset(50, -20), const Offset(50, 20), 3),
+      isEmpty,
+    );
+
+    final dashed = [rectangle.copyWith(width: 1, dashed: true)];
+    const gap = Offset(6.5, 0);
+    const painted = Offset(3, 0);
+    expect(eraseShapes(dashed, gap, gap, 0.2), same(dashed));
+    expect(eraseShapes(dashed, painted, painted, 0.2), isEmpty);
+
+    const stroke = InkStroke(
+      points: [InkPoint(Offset.zero), InkPoint(Offset(100, 0))],
+      color: ink,
+      width: 1,
+      dashed: true,
+    );
+    final strokes = [stroke];
+    expect(eraseStrokes(strokes, gap, gap, 0.2), same(strokes));
+    expect(eraseStrokes(strokes, painted, painted, 0.2), hasLength(2));
+  });
+
   test('hidden shape edges can be individually toggled', () {
     const box = InkShape(
       kind: ShapeKind.box,
@@ -154,3 +226,7 @@ void main() {
     expect(isShapeEdgeDashed(edited, 0), isTrue);
   });
 }
+
+List<double> collectPressures(List<InkPoint> points) => [
+  for (final point in points) point.pressure,
+];
