@@ -86,6 +86,105 @@ function Copy-VisualCppRuntime([string]$ReleaseDir) {
     }
 }
 
+function Wait-AppWindow([scriptblock]$Condition, [string]$Failure) {
+    $timeout = [Diagnostics.Stopwatch]::StartNew()
+    do {
+        if (& $Condition) { return }
+        Start-Sleep -Milliseconds 100
+    } while ($timeout.Elapsed.TotalSeconds -lt 12)
+    throw $Failure
+}
+
+function Test-AppWindow([Diagnostics.Process]$Process) {
+    if (-not ('InkStudyWindowTest' -as [type])) {
+        Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class InkStudyWindowTest {
+    [DllImport("user32.dll")]
+    public static extern bool IsZoomed(IntPtr window);
+
+    [DllImport("user32.dll")]
+    public static extern bool IsIconic(IntPtr window);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetWindow(IntPtr window, uint command);
+
+    public static IntPtr FlutterView(IntPtr window) {
+        const uint GW_CHILD = 5;
+        return GetWindow(window, GW_CHILD);
+    }
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern int GetWindowLong(IntPtr window, int index);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern uint MapVirtualKey(uint code, uint mapType);
+
+    [DllImport("user32.dll", CharSet = CharSet.Unicode)]
+    private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    public static bool HasResizeFrame(IntPtr window) {
+        const int GWL_STYLE = -16;
+        const int WS_THICKFRAME = 0x00040000;
+        return (GetWindowLong(window, GWL_STYLE) & WS_THICKFRAME) != 0;
+    }
+
+    public static bool SystemCommand(IntPtr window, int command) {
+        const uint WM_SYSCOMMAND = 0x0112;
+        return PostMessage(window, WM_SYSCOMMAND, new IntPtr(command), IntPtr.Zero);
+    }
+
+    public static bool PressKey(IntPtr view, int key) {
+        const uint WM_KEYDOWN = 0x0100;
+        const uint WM_KEYUP = 0x0101;
+        uint scan = MapVirtualKey((uint)key, 0);
+        int down = (int)((scan << 16) | 1);
+        int up = down | unchecked((int)0xc0000000);
+        return PostMessage(view, WM_KEYDOWN, new IntPtr(key), new IntPtr(down)) &&
+               PostMessage(view, WM_KEYUP, new IntPtr(key), new IntPtr(up));
+    }
+}
+'@
+    }
+
+    Wait-AppWindow {
+        $Process.Refresh()
+        if ($Process.HasExited) {
+            throw "The installed app stopped during launch (exit $($Process.ExitCode))."
+        }
+        $Process.MainWindowHandle -ne [IntPtr]::Zero
+    } 'The installed app did not display a main window.'
+    $window = $Process.MainWindowHandle
+    Wait-AppWindow { [InkStudyWindowTest]::IsZoomed($window) } 'Ink Study did not open maximized.'
+
+    # Exercise the installed runner through native window messages. Restoring
+    # first lets the fullscreen check observe a change from an ordinary window.
+    $restore = 0xF120
+    $minimize = 0xF020
+    $maximize = 0xF030
+    $normal = { -not [InkStudyWindowTest]::IsZoomed($window) -and -not [InkStudyWindowTest]::IsIconic($window) }
+    if (-not [InkStudyWindowTest]::SystemCommand($window, $restore)) { throw 'Could not request restore.' }
+    Wait-AppWindow $normal 'Ink Study did not restore from maximized.'
+    if (-not [InkStudyWindowTest]::SystemCommand($window, $maximize)) { throw 'Could not request maximize.' }
+    Wait-AppWindow { [InkStudyWindowTest]::IsZoomed($window) } 'Ink Study did not maximize.'
+    if (-not [InkStudyWindowTest]::SystemCommand($window, $restore)) { throw 'Could not request restore.' }
+    Wait-AppWindow $normal 'Ink Study did not restore before minimizing.'
+    if (-not [InkStudyWindowTest]::SystemCommand($window, $minimize)) { throw 'Could not request minimize.' }
+    Wait-AppWindow { [InkStudyWindowTest]::IsIconic($window) } 'Ink Study did not minimize.'
+    if (-not [InkStudyWindowTest]::SystemCommand($window, $restore)) { throw 'Could not request restore.' }
+    Wait-AppWindow $normal 'Ink Study did not restore from minimized.'
+
+    $view = [InkStudyWindowTest]::FlutterView($window)
+    if ($view -eq [IntPtr]::Zero) { throw 'Ink Study did not create a Flutter view.' }
+    if (-not [InkStudyWindowTest]::HasResizeFrame($window)) { throw 'Ink Study did not have a resizable window before fullscreen.' }
+    if (-not [InkStudyWindowTest]::PressKey($view, 0x7A)) { throw 'Could not send F11 to Ink Study.' }
+    Wait-AppWindow { -not [InkStudyWindowTest]::HasResizeFrame($window) } 'F11 did not enter fullscreen.'
+    if (-not [InkStudyWindowTest]::PressKey($view, 0x1B)) { throw 'Could not send Escape to Ink Study.' }
+    Wait-AppWindow { [InkStudyWindowTest]::HasResizeFrame($window) } 'Escape did not exit fullscreen.'
+}
+
 function Test-Installer([string]$Installer) {
     $installDir = Join-Path ([IO.Path]::GetTempPath()) ("ink-study-install-" + [guid]::NewGuid().ToString('N'))
     $process = $null
@@ -105,6 +204,7 @@ function Test-Installer([string]$Installer) {
         if ($process.HasExited) {
             throw "The installed app stopped during launch (exit $($process.ExitCode))."
         }
+        Test-AppWindow $process
     }
     finally {
         if ($process -and -not $process.HasExited) {
@@ -121,7 +221,7 @@ function Test-Installer([string]$Installer) {
             }
         }
     }
-    Write-Host 'Installer, Start menu shortcut, app launch, and uninstall checks passed.'
+    Write-Host 'Installer, Start menu shortcut, app launch, native window state, F11/Escape, and uninstall checks passed.'
 }
 
 Push-Location $projectDir

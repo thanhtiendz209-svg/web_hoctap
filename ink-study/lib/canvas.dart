@@ -33,6 +33,9 @@ class _Selection {
   final _ObjectKind kind;
   final int index;
 
+  bool matches(_Selection? other) =>
+      kind == other?.kind && index == other?.index;
+
   Rect? bounds(InkDocument document) => switch (kind) {
     _ObjectKind.image =>
       index < document.images.length ? document.images[index].bounds : null,
@@ -44,6 +47,167 @@ class _Selection {
           : null,
   };
 }
+
+class _GroupSelection {
+  const _GroupSelection({
+    required this.bounds,
+    required this.strokes,
+    required this.shapes,
+    required this.images,
+    required this.regions,
+  });
+
+  final Rect bounds;
+  final Set<int> strokes;
+  final Set<int> shapes;
+  final Set<int> images;
+  final Set<int> regions;
+
+  _Selection? get singleObject {
+    if (strokes.isNotEmpty ||
+        shapes.length + images.length + regions.length != 1) {
+      return null;
+    }
+    if (shapes.isNotEmpty) return _Selection(_ObjectKind.shape, shapes.single);
+    if (images.isNotEmpty) return _Selection(_ObjectKind.image, images.single);
+    return _Selection(_ObjectKind.pdf, regions.single);
+  }
+
+  _GroupSelection shift(Offset delta) => _GroupSelection(
+    bounds: bounds.shift(delta),
+    strokes: strokes,
+    shapes: shapes,
+    images: images,
+    regions: regions,
+  );
+}
+
+_GroupSelection? _groupIn(InkDocument document, Rect rectangle) {
+  final strokes = <int>{};
+  final shapes = <int>{};
+  final images = <int>{};
+  final regions = <int>{};
+  Rect? bounds;
+
+  void include(Set<int> selected, int index, Rect objectBounds) {
+    selected.add(index);
+    bounds = bounds?.expandToInclude(objectBounds) ?? objectBounds;
+  }
+
+  for (final (index, stroke) in document.strokes.indexed) {
+    final objectBounds = inkStrokeBounds(stroke);
+    if (objectBounds.overlaps(rectangle) &&
+        _pathHitsRectangle(
+          stroke.points.map((point) => point.position),
+          rectangle.inflate(stroke.width / 2),
+        )) {
+      include(strokes, index, objectBounds);
+    }
+  }
+  for (final (index, shape) in document.shapes.indexed) {
+    final target = rectangle.inflate(shape.width / 2);
+    final edges = shapeEdges(shape);
+    if (edges.any((edge) => _pathHitsRectangle(edge.points, target))) {
+      final objectBounds = edges
+          .expand((edge) => edge.points)
+          .fold<Rect?>(
+            null,
+            (bounds, point) =>
+                bounds?.expandToInclude(point & Size.zero) ??
+                (point & Size.zero),
+          );
+      if (objectBounds != null) {
+        include(shapes, index, objectBounds.inflate(shape.width / 2));
+      }
+    }
+  }
+  for (final (index, image) in document.images.indexed) {
+    final sine = math.sin(image.rotation).abs();
+    final cosine = math.cos(image.rotation).abs();
+    final objectBounds = Rect.fromCenter(
+      center: image.bounds.center,
+      width: cosine * image.bounds.width + sine * image.bounds.height,
+      height: sine * image.bounds.width + cosine * image.bounds.height,
+    );
+    if (objectBounds.overlaps(rectangle)) include(images, index, objectBounds);
+  }
+  for (final (index, region) in document.pdfRegions.indexed) {
+    if (region.bounds.overlaps(rectangle)) {
+      include(regions, index, region.bounds);
+    }
+  }
+  final selectedBounds = bounds;
+  return selectedBounds == null
+      ? null
+      : _GroupSelection(
+          bounds: selectedBounds,
+          strokes: strokes,
+          shapes: shapes,
+          images: images,
+          regions: regions,
+        );
+}
+
+bool _pathHitsRectangle(Iterable<Offset> points, Rect rectangle) {
+  Offset? previous;
+  for (final point in points) {
+    if (rectangle.contains(point)) return true;
+    if (previous != null &&
+        _segmentCrossesRectangle(previous, point, rectangle)) {
+      return true;
+    }
+    previous = point;
+  }
+  return false;
+}
+
+bool _segmentCrossesRectangle(Offset start, Offset end, Rect rectangle) {
+  final delta = end - start;
+  if (delta.dx != 0) {
+    for (final x in [rectangle.left, rectangle.right]) {
+      final fraction = (x - start.dx) / delta.dx;
+      final y = start.dy + fraction * delta.dy;
+      if (fraction >= 0 &&
+          fraction <= 1 &&
+          y >= rectangle.top &&
+          y <= rectangle.bottom) {
+        return true;
+      }
+    }
+  }
+  if (delta.dy != 0) {
+    for (final y in [rectangle.top, rectangle.bottom]) {
+      final fraction = (y - start.dy) / delta.dy;
+      final x = start.dx + fraction * delta.dx;
+      if (fraction >= 0 &&
+          fraction <= 1 &&
+          x >= rectangle.left &&
+          x <= rectangle.right) {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+List<T> _mapSelected<T>(
+  List<T> objects,
+  Set<int> selected,
+  T Function(T) move,
+) => selected.isEmpty
+    ? objects
+    : [
+        for (final (index, object) in objects.indexed)
+          selected.contains(index) ? move(object) : object,
+      ];
+
+List<T> _withoutSelected<T>(List<T> objects, Set<int> selected) =>
+    selected.isEmpty
+    ? objects
+    : [
+        for (final (index, object) in objects.indexed)
+          if (!selected.contains(index)) object,
+      ];
 
 class _Page {
   const _Page(this.index, this.info, this.bounds);
@@ -101,6 +265,7 @@ class InkCanvas extends StatefulWidget {
     required this.onViewportChanged,
     this.panMode = false,
     this.onError,
+    this.documentScope,
   });
 
   final InkDocument document;
@@ -117,6 +282,7 @@ class InkCanvas extends StatefulWidget {
   final void Function(double zoom, double scroll) onViewportChanged;
   final bool panMode;
   final ValueChanged<String>? onError;
+  final Object? documentScope;
 
   @override
   State<InkCanvas> createState() => InkCanvasState();
@@ -156,6 +322,12 @@ class InkCanvasState extends State<InkCanvas>
   InkStroke? _activeStroke;
   InkShape? _activeShape;
   _Selection? _selection;
+  _GroupSelection? _groupSelection;
+  InkDocument? _committedDocument;
+  bool _selectingRectangle = false;
+  bool _movingGroup = false;
+  Rect? _selectionRectangle;
+  Offset _groupMove = Offset.zero;
   _Handle? _handle;
   _Page? _cropPage;
   Rect? _cropPreview;
@@ -235,7 +407,15 @@ class InkCanvasState extends State<InkCanvas>
             widget.tool != Tool.select && widget.tool != Tool.pdfCrop,
       );
     }
-    if (!identical(oldWidget.document, widget.document)) _pendingCrop = null;
+    final scopeChanged = oldWidget.documentScope != widget.documentScope;
+    final documentChanged = !identical(oldWidget.document, widget.document);
+    if (scopeChanged || documentChanged) {
+      if (scopeChanged || !identical(_committedDocument, widget.document)) {
+        cancelGesture();
+      }
+      _committedDocument = null;
+      _pendingCrop = null;
+    }
     if (_selection?.bounds(widget.document) == null) _selection = null;
     _queueAssets();
   }
@@ -359,7 +539,13 @@ class InkCanvasState extends State<InkCanvas>
     if (event.kind == PointerDeviceKind.mouse &&
         event.buttons & kSecondaryMouseButton != 0) {
       if (widget.tool == Tool.select || widget.tool == Tool.pdfCrop) {
-        _selection = _hitSelection(point, pdfOnly: widget.tool == Tool.pdfCrop);
+        if (widget.tool != Tool.select || !_inGroup(point)) {
+          _groupSelection = null;
+          _selection = _hitSelection(
+            point,
+            pdfOnly: widget.tool == Tool.pdfCrop,
+          );
+        }
         _refresh();
         _selectionMenu(event.position, point);
       }
@@ -408,7 +594,7 @@ class InkCanvasState extends State<InkCanvas>
         _laserFade.value = 0;
         _laser = [point];
       case Tool.select:
-        _startSelection(point, pdfOnly: false);
+        _startSelect(point);
       case Tool.pdfCrop:
         if (!_startSelection(point, pdfOnly: true)) {
           _cropPage = _pageAt(point);
@@ -451,7 +637,13 @@ class InkCanvasState extends State<InkCanvas>
       case Tool.laser:
         _laser.add(point);
       case Tool.select:
-        _moveSelection(origin, point);
+        if (_selectingRectangle) {
+          _updateSelectionRectangle(origin, point);
+        } else if (_movingGroup) {
+          _moveGroup(point - origin);
+        } else {
+          _moveSelection(origin, point);
+        }
       case Tool.pdfCrop:
         final page = _cropPage;
         if (page != null) {
@@ -475,6 +667,16 @@ class InkCanvasState extends State<InkCanvas>
     if (_pointer != event.pointer) return;
     final stroke = _activeStroke;
     final shape = _activeShape;
+    if (_gestureTool == Tool.select && _gestureOrigin != null) {
+      final end = _onPaper(_toDocument(event.localPosition));
+      if (_selectingRectangle) {
+        _updateSelectionRectangle(_gestureOrigin!, end);
+        _finishSelection(end);
+      } else if (_movingGroup) {
+        _moveGroup(end - _gestureOrigin!);
+        _groupSelection = _groupSelection?.shift(_groupMove);
+      }
+    }
     var update = _working;
     if (stroke != null) {
       final point = _onPaper(_toDocument(event.localPosition));
@@ -499,7 +701,7 @@ class InkCanvasState extends State<InkCanvas>
     }
     if (_gestureTool == Tool.laser) _laserFade.forward(from: 0);
     _clearGesture();
-    if (update != null) widget.onChange(update);
+    if (update != null) _commit(update);
     _refresh();
   }
 
@@ -523,12 +725,19 @@ class InkCanvasState extends State<InkCanvas>
     _cropPage = null;
     _cropPreview = null;
     _handle = null;
+    _selectingRectangle = false;
+    _selectionRectangle = null;
+    _movingGroup = false;
+    _groupMove = Offset.zero;
   }
 
   void cancelGesture({bool clearSelection = true}) {
     if (_gestureTool == Tool.laser) _laserFade.forward(from: 0);
     _clearGesture();
-    if (clearSelection) _selection = null;
+    if (clearSelection) {
+      _selection = null;
+      _groupSelection = null;
+    }
     if (_pendingCrop != null) setState(() => _pendingCrop = null);
     _refresh();
   }
@@ -546,8 +755,13 @@ class InkCanvasState extends State<InkCanvas>
     ];
     _selection = _Selection(_ObjectKind.pdf, regions.length - 1);
     setState(() => _pendingCrop = null);
-    widget.onChange(widget.document.copyWith(pdfRegions: regions));
+    _commit(widget.document.copyWith(pdfRegions: regions));
     _refresh();
+  }
+
+  void _commit(InkDocument document) {
+    _committedDocument = document;
+    widget.onChange(document);
   }
 
   void _erase(Offset start, Offset end) {
@@ -622,6 +836,96 @@ class InkCanvasState extends State<InkCanvas>
     _selection = _hitSelection(point, pdfOnly: pdfOnly);
     _handle = _selection == null ? null : _Handle.move;
     return _selection != null;
+  }
+
+  bool _inGroup(Offset point) =>
+      _groupSelection?.bounds.inflate(7 / _zoom).contains(point) ?? false;
+
+  void _startSelect(Offset point) {
+    if (_inGroup(point)) {
+      _movingGroup = true;
+      return;
+    }
+    final selected = _selection;
+    final bounds = selected?.bounds(widget.document);
+    if (selected != null && bounds != null) {
+      _handle = _hitHandle(bounds, point);
+      if (_handle != null) return;
+      if (selected.matches(_hitSelection(point, pdfOnly: false))) {
+        _handle = _Handle.move;
+        return;
+      }
+    }
+    _selection = null;
+    _groupSelection = null;
+    _selectingRectangle = true;
+  }
+
+  void _updateSelectionRectangle(Offset start, Offset end) {
+    final rectangle = Rect.fromPoints(start, end);
+    _selectionRectangle =
+        rectangle.width >= 3 / _zoom && rectangle.height >= 3 / _zoom
+        ? rectangle
+        : null;
+  }
+
+  void _finishSelection(Offset point) {
+    final rectangle = _selectionRectangle;
+    if (rectangle == null) {
+      _selection = _hitSelection(point, pdfOnly: false);
+      return;
+    }
+    final group = _groupIn(widget.document, rectangle);
+    _selection = group?.singleObject;
+    if (_selection == null) _groupSelection = group;
+  }
+
+  void _moveGroup(Offset delta) {
+    final group = _groupSelection;
+    if (group == null) return;
+    final bounds = group.bounds;
+    final left = math.min(0.0, bounds.left);
+    final top = math.min(0.0, bounds.top);
+    final right = math.max(_paperWidth, bounds.right);
+    _groupMove = Offset(
+      delta.dx.clamp(left - bounds.left, right - bounds.right).toDouble(),
+      math.max(delta.dy, top - bounds.top),
+    );
+    if (_groupMove == Offset.zero) {
+      _working = null;
+      return;
+    }
+    final document = widget.document;
+    _working = document.copyWith(
+      strokes: _mapSelected(
+        document.strokes,
+        group.strokes,
+        (stroke) => stroke.copyWith(
+          points: [
+            for (final point in stroke.points)
+              InkPoint(point.position + _groupMove, point.pressure),
+          ],
+        ),
+      ),
+      shapes: _mapSelected(
+        document.shapes,
+        group.shapes,
+        (shape) => shape.copyWith(
+          start: shape.start + _groupMove,
+          end: shape.end + _groupMove,
+        ),
+      ),
+      images: _mapSelected(
+        document.images,
+        group.images,
+        (image) => image.copyWith(bounds: image.bounds.shift(_groupMove)),
+      ),
+      pdfRegions: _mapSelected(
+        document.pdfRegions,
+        group.regions,
+        (region) => region.copyWith(bounds: region.bounds.shift(_groupMove)),
+      ),
+    );
   }
 
   Rect _resize(Rect bounds, Offset delta, _Handle handle) {
@@ -727,8 +1031,22 @@ class InkCanvasState extends State<InkCanvas>
   }
 
   bool deleteSelection() {
+    final group = _groupSelection;
     final selection = _selection;
     final doc = widget.document;
+    if (group != null) {
+      _groupSelection = null;
+      _commit(
+        doc.copyWith(
+          strokes: _withoutSelected(doc.strokes, group.strokes),
+          shapes: _withoutSelected(doc.shapes, group.shapes),
+          images: _withoutSelected(doc.images, group.images),
+          pdfRegions: _withoutSelected(doc.pdfRegions, group.regions),
+        ),
+      );
+      _refresh();
+      return true;
+    }
     if (selection == null || selection.bounds(doc) == null) return false;
     _selection = null;
     final update = switch (selection.kind) {
@@ -742,7 +1060,7 @@ class InkCanvasState extends State<InkCanvas>
         pdfRegions: [...doc.pdfRegions]..removeAt(selection.index),
       ),
     };
-    widget.onChange(update);
+    _commit(update);
     _refresh();
     return true;
   }
@@ -777,13 +1095,14 @@ class InkCanvasState extends State<InkCanvas>
   }
 
   Future<void> _selectionMenu(Offset globalPosition, Offset point) async {
+    final group = _groupSelection;
     final selection = _selection;
     final doc = widget.document;
-    if (selection == null || selection.bounds(doc) == null) return;
+    if (group == null && selection?.bounds(doc) == null) return;
     final overlay = Overlay.of(context).context.findRenderObject() as RenderBox;
     final position = overlay.globalToLocal(globalPosition);
-    final shape = selection.kind == _ObjectKind.shape
-        ? doc.shapes[selection.index]
+    final shape = selection?.kind == _ObjectKind.shape
+        ? doc.shapes[selection!.index]
         : null;
     final edge = shape == null ? null : _nearestEdge(shape, point);
     final action = await showMenu<String>(
@@ -802,12 +1121,14 @@ class InkCanvasState extends State<InkCanvas>
                   : 'Đổi cạnh này thành nét đứt',
             ),
           ),
-        if (selection.kind == _ObjectKind.image)
+        if (selection?.kind == _ObjectKind.image)
           const PopupMenuItem(value: 'rotate', child: Text('Xoay ảnh 90°')),
         PopupMenuItem(
           value: 'delete',
           child: Text(
-            selection.kind == _ObjectKind.pdf
+            group != null
+                ? 'Xóa phần đã chọn'
+                : selection?.kind == _ObjectKind.pdf
                 ? 'Khôi phục vùng PDF gốc'
                 : 'Xóa đối tượng',
           ),
@@ -815,25 +1136,29 @@ class InkCanvasState extends State<InkCanvas>
       ],
     );
     if (!mounted ||
+        !identical(_groupSelection, group) ||
         !identical(_selection, selection) ||
         !identical(widget.document, doc)) {
       return;
     }
     if (action == 'delete') {
       deleteSelection();
-    } else if (action == 'rotate') {
+    } else if (action == 'rotate' && selection != null) {
       final images = [...doc.images];
       final image = images[selection.index];
       images[selection.index] = image.copyWith(
         rotation: (image.rotation + math.pi / 2) % (2 * math.pi),
       );
-      widget.onChange(doc.copyWith(images: images));
-    } else if (action == 'dash' && shape != null && edge != null) {
+      _commit(doc.copyWith(images: images));
+    } else if (action == 'dash' &&
+        shape != null &&
+        edge != null &&
+        selection != null) {
       final shapes = [...doc.shapes];
       final edits = {...shape.dashedEdges};
       if (!edits.remove(edge)) edits.add(edge);
       shapes[selection.index] = shape.copyWith(dashedEdges: edits);
-      widget.onChange(doc.copyWith(shapes: shapes));
+      _commit(doc.copyWith(shapes: shapes));
     }
   }
 
@@ -1002,6 +1327,18 @@ class InkCanvasState extends State<InkCanvas>
     if (rect != null &&
         (widget.tool == Tool.select || widget.tool == Tool.pdfCrop)) {
       _paintSelection(canvas, rect, handles: true);
+    }
+    final group = _groupSelection;
+    if (group != null && widget.tool == Tool.select) {
+      _paintSelection(
+        canvas,
+        group.bounds.shift(_groupMove).inflate(5 / _zoom),
+        handles: false,
+      );
+    }
+    final selectionRectangle = _selectionRectangle;
+    if (selectionRectangle != null) {
+      _paintSelection(canvas, selectionRectangle, handles: false);
     }
     final crop = _cropPreview ?? _pendingCrop?.crop;
     if (crop != null && !crop.isEmpty) {

@@ -5,14 +5,16 @@
 ## Sử dụng
 
 - Bấm **Ghi chú mới** hoặc dùng Ctrl+N. Kéo chuột trái hoặc dùng bút cảm ứng để viết. Lăn chuột để cuộn và giữ Ctrl khi lăn để thu phóng.
-- Dùng **Tẩy một phần** để cắt nét. Ctrl+Z hoàn tác. Ctrl+Y làm lại.
+- Bấm vào hình bút bi, bút chì hoặc bút đánh dấu để viết ngay. Bấm một ô màu để đổi mực. Mũi tên bên cạnh từng bút mở phần chỉnh nét. Chọn **Gôm** rồi kéo ngang nét viết để tẩy một đoạn.
+- Bấm **Chọn vùng**, giữ chuột trái ở khoảng trống trên giấy rồi kéo một khung qua các nét, hình, ảnh hoặc vùng PDF đã tách. Kéo bên trong khung sau khi thả chuột để di chuyển cả nhóm. Phím Delete xóa nhóm, Ctrl+Z hoàn tác và Ctrl+Y làm lại.
+- Ở góc trên bên phải, nút **−** thu ứng dụng xuống thanh tác vụ, nút **□ / ❐** phóng to hoặc khôi phục kích thước. Cũng có thể nhấp đúp tên ghi chú trên thanh tiêu đề. Nhấn **F11** để viết toàn màn hình và **F11** hoặc **Esc** để trở lại. Nút **Trình bày với laser** mở chế độ trình chiếu.
 - Dùng **Chèn → PDF làm nền**. Để chỉnh sơ đồ, chọn **Chèn → Chỉnh vùng PDF**, khoanh vùng trong một trang rồi chọn **Tách vùng**. Kéo cạnh khung để giãn theo một chiều.
-- Dán ảnh với Ctrl+V. Dùng **Chọn** để di chuyển hoặc chỉnh đối tượng. Bấm chuột phải để xem lệnh phù hợp cho đối tượng, chẳng hạn xoay ảnh hoặc đổi kiểu cạnh của hình.
+- Dán ảnh với Ctrl+V. Dùng **Chọn vùng** rồi bấm vào một ảnh hoặc hình để hiện tay nắm chỉnh kích thước. Bấm chuột phải để xem các lệnh như xoay ảnh hoặc đổi kiểu cạnh của hình.
 - Dùng **Xuất PDF** để chọn toàn bộ, vùng đang xem hoặc một vùng khoanh trên giấy. Bản xuất PDF A4 giữ bố cục hiển thị dưới dạng ảnh có độ phân giải cao.
 
 ## Tải bộ cài Windows
 
-Mở lần chạy thành công trong **Actions → Build Ink Study for Windows** và chọn **Tải InkStudy-Setup.exe** trong phần tóm tắt. Sau khi cài, mở **Ink Study** từ menu Start. Quy trình đóng gói đi kèm thư viện cần thiết.
+Mở lần chạy thành công trong **Actions → Build Ink Study for Windows** và chọn **Tải InkStudy-Setup.exe** trong phần tóm tắt. Nếu đã dùng Ink Study, đóng ứng dụng rồi chạy bộ cài mới bằng cùng tài khoản Windows để tiếp tục dùng sổ hiện có. Sau khi cài, mở **Ink Study** từ menu Start.
 
 ## Build lại
 
