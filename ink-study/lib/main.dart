@@ -26,6 +26,7 @@ Future<void> main() async {
         ),
         () async {
           await windowManager.show();
+          await windowManager.maximize();
           await windowManager.focus();
         },
       ),
@@ -1377,8 +1378,8 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
             icon: const Icon(Icons.add_rounded, size: 18),
           ),
           TextButton(
-            onPressed: () => _changeZoom(note, 1),
-            child: const Text('100%'),
+            onPressed: () => _canvas.currentState?.fitWidth(),
+            child: const Text('Vừa chiều rộng'),
           ),
         ],
       ),

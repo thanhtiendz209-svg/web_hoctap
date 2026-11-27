@@ -171,6 +171,8 @@ class InkCanvasState extends State<InkCanvas>
 
   Offset documentPoint(Offset local) => _onPaper(_toDocument(local));
 
+  void fitWidth() => _setView((_size.width - 32) / _paperWidth, _scroll, 0);
+
   Rect get visibleBounds {
     final topLeft = _toDocument(Offset.zero);
     final bottomRight = _toDocument(Offset(_size.width, _size.height));
