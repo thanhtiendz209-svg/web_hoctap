@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart' show defaultTargetPlatform;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:window_manager/window_manager.dart';
@@ -759,11 +760,10 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           body: SafeArea(
             child: Column(
               children: [
-                _titleBar(note),
+                if (!_present) _tools(note),
                 if (_store == null)
                   Expanded(child: _loading())
                 else ...[
-                  if (note != null && !_present) _tools(note),
                   if (_busy) const LinearProgressIndicator(minHeight: 2),
                   Expanded(
                     child: Row(
@@ -774,7 +774,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                       ],
                     ),
                   ),
-                  if (!_present && note != null) _statusBar(note),
+                  _statusBar(note),
                 ],
               ],
             ),
@@ -816,133 +816,6 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       ],
     ),
   );
-
-  Widget _titleBar(InkNote? note) {
-    final scheme = Theme.of(context).colorScheme;
-    final windowed = _mode == _DeskMode.windowed;
-    final compact = MediaQuery.sizeOf(context).width < 900;
-    final title = Align(
-      alignment: Alignment.centerLeft,
-      child: Text(
-        note?.title ?? 'Thư viện',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: scheme.onSurfaceVariant,
-          fontWeight: FontWeight.w500,
-        ),
-      ),
-    );
-    return Container(
-      height: 48,
-      padding: const EdgeInsets.only(left: 8),
-      decoration: BoxDecoration(
-        color: scheme.surface,
-        border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
-      ),
-      child: Row(
-        children: [
-          if (!_present) ...[
-            if (windowed)
-              IconButton(
-                onPressed: () => setState(() => _rail = !_rail),
-                tooltip: _rail ? 'Ẩn thư viện' : 'Hiện thư viện',
-                icon: const Icon(Icons.view_sidebar_outlined, size: 21),
-              ),
-            const SizedBox(width: 4),
-            Image.asset(
-              'assets/app-icon.png',
-              width: 30,
-              height: 30,
-              excludeFromSemantics: true,
-              errorBuilder: (context, error, stackTrace) => const SizedBox(
-                width: 30,
-                height: 30,
-                child: Icon(Icons.draw_outlined, size: 21, color: _accent),
-              ),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'Ink Study',
-              style: TextStyle(fontWeight: FontWeight.w700, fontSize: 17),
-            ),
-            if (note != null) ...[
-              const Padding(
-                padding: EdgeInsets.symmetric(horizontal: 11),
-                child: Text('/'),
-              ),
-            ],
-          ],
-          Expanded(
-            child: windowed && Platform.isWindows
-                ? DragToMoveArea(child: title)
-                : title,
-          ),
-          if (_present) ...[
-            _toolButton(
-              Icons.lens_blur,
-              'Laser',
-              _tool == Tool.laser,
-              () => _setTool(Tool.laser),
-            ),
-            _toolButton(
-              Icons.pan_tool_outlined,
-              'Cuộn',
-              _tool == Tool.hand,
-              () => _setTool(Tool.hand),
-            ),
-            TextButton.icon(
-              onPressed: () => _changeMode(_DeskMode.windowed),
-              icon: const Icon(Icons.fullscreen_exit),
-              label: const Text('Thoát'),
-            ),
-          ] else ...[
-            if (note != null) ...[
-              IconButton(
-                tooltip: windowed
-                    ? 'Viết toàn màn hình (F11)'
-                    : 'Thoát toàn màn hình (F11)',
-                onPressed: _toggleFullScreen,
-                icon: Icon(
-                  windowed
-                      ? Icons.fullscreen_rounded
-                      : Icons.fullscreen_exit_rounded,
-                ),
-              ),
-              IconButton(
-                tooltip: 'Trình bày với laser',
-                onPressed: () => _changeMode(_DeskMode.presentation),
-                icon: const Icon(Icons.slideshow_rounded),
-              ),
-              if (compact)
-                IconButton(
-                  tooltip: 'Xuất PDF',
-                  onPressed: _busy ? null : _export,
-                  icon: const Icon(Icons.picture_as_pdf_outlined),
-                )
-              else
-                FilledButton.tonalIcon(
-                  onPressed: _busy ? null : _export,
-                  icon: const Icon(Icons.picture_as_pdf_outlined, size: 17),
-                  label: const Text('Xuất PDF'),
-                ),
-            ],
-            IconButton(
-              tooltip: widget.dark ? 'Giao diện sáng' : 'Giao diện tối',
-              onPressed: widget.onTheme,
-              icon: Icon(
-                widget.dark
-                    ? Icons.light_mode_outlined
-                    : Icons.dark_mode_outlined,
-                size: 19,
-              ),
-            ),
-            if (windowed && Platform.isWindows) const InkWindowControls(),
-          ],
-        ],
-      ),
-    );
-  }
 
   Widget _sidebar() {
     final scheme = Theme.of(context).colorScheme;
@@ -1088,39 +961,99 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     );
   }
 
-  Widget _tools(InkNote note) {
+  Widget _tools(InkNote? note) {
     final scheme = Theme.of(context).colorScheme;
+    final windowed = _mode == _DeskMode.windowed;
+    final caption = windowed && defaultTargetPlatform == TargetPlatform.windows;
+    final canToggleSidebar = windowed && _store != null;
+    if (note == null && !caption && !canToggleSidebar) {
+      return const SizedBox.shrink();
+    }
     return DecoratedBox(
       decoration: BoxDecoration(
         color: scheme.surface,
         border: Border(bottom: BorderSide(color: scheme.outlineVariant)),
       ),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final showLabels = constraints.maxWidth >= 940;
-          return SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-            child: Row(
+      child: SizedBox(
+        height: 46,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // Keep the caption buttons and a draggable strip outside the
+            // scrolling tools so they're available even at minimum width.
+            final reserved =
+                (caption ? 154.0 : 0) + (canToggleSidebar ? 35.0 : 0);
+            final toolWidth = (constraints.maxWidth - reserved)
+                .clamp(0.0, double.infinity)
+                .toDouble();
+            final showLabels = toolWidth >= 940;
+            final compact = toolWidth < 615;
+            return Row(
               children: [
-                for (final kind in PenKind.values)
-                  _penButton(kind, note, showLabel: showLabels),
-                _shelfDivider(),
-                _eraserButton(),
-                const SizedBox(width: 4),
-                _shelfAction(
-                  Icons.crop_free_rounded,
-                  'Chọn vùng',
-                  'Chọn vùng · Shift + kéo để chọn nhanh',
-                  _tool == Tool.select,
-                  () => _setTool(Tool.select),
+                if (canToggleSidebar)
+                  _shelfIcon(
+                    IconButton(
+                      onPressed: () => setState(() => _rail = !_rail),
+                      tooltip: _rail ? 'Ẩn thư viện' : 'Hiện thư viện',
+                      icon: const Icon(Icons.view_sidebar_outlined, size: 19),
+                    ),
+                  ),
+                if (note != null)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(maxWidth: toolWidth),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: EdgeInsets.symmetric(
+                        horizontal: compact ? 2 : 7,
+                        vertical: 4,
+                      ),
+                      child: Row(
+                        children: [
+                          for (final kind in PenKind.values)
+                            _penButton(
+                              kind,
+                              note,
+                              showLabel: showLabels,
+                              compact: compact,
+                            ),
+                          _shelfDivider(),
+                          _eraserButton(compact: compact),
+                          if (compact)
+                            _shelfIcon(
+                              _toolButton(
+                                Icons.crop_free_rounded,
+                                'Chọn vùng · Shift + kéo để chọn nhanh',
+                                _tool == Tool.select,
+                                () => _setTool(Tool.select),
+                              ),
+                            )
+                          else
+                            _shelfAction(
+                              Icons.crop_free_rounded,
+                              'Chọn vùng',
+                              'Chọn vùng · Shift + kéo để chọn nhanh',
+                              _tool == Tool.select,
+                              () => _setTool(Tool.select),
+                            ),
+                          _shelfDivider(),
+                          ..._shelfActions(note, showLabels: showLabels),
+                        ],
+                      ),
+                    ),
+                  ),
+                Expanded(
+                  child: caption
+                      ? const DragToMoveArea(
+                          child: SizedBox.expand(
+                            key: ValueKey('window-drag-area'),
+                          ),
+                        )
+                      : const SizedBox.shrink(),
                 ),
-                _shelfDivider(),
-                ..._shelfActions(note, showLabels: showLabels),
+                if (caption) const InkWindowControls(),
               ],
-            ),
-          );
-        },
+            );
+          },
+        ),
       ),
     );
   }
@@ -1145,7 +1078,12 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
 
   double _eraserSize = 20;
 
-  Widget _penButton(PenKind kind, InkNote note, {required bool showLabel}) {
+  Widget _penButton(
+    PenKind kind,
+    InkNote note, {
+    required bool showLabel,
+    required bool compact,
+  }) {
     final scheme = Theme.of(context).colorScheme;
     final (color, _, _) = _pens[kind]!;
     final label = penLabel(kind);
@@ -1154,6 +1092,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       tooltip: label,
       selected: _tool == Tool.pen && _pen == kind,
       showLabel: showLabel,
+      compact: compact,
       preview: ToolNibPreview(
         pen: kind,
         color: color,
@@ -1177,13 +1116,14 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     );
   }
 
-  Widget _eraserButton() {
+  Widget _eraserButton({required bool compact}) {
     final scheme = Theme.of(context).colorScheme;
     return _shelfSplitTool(
       label: 'Gôm',
       tooltip: 'Tẩy một phần nét',
       selected: _tool == Tool.eraser,
-      showLabel: true,
+      showLabel: !compact,
+      compact: compact,
       preview: ToolNibPreview(color: scheme.primary, outline: scheme.onSurface),
       onPressed: () => _setTool(Tool.eraser),
       options: ToolOptionsMenu(
@@ -1213,6 +1153,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     required String tooltip,
     required bool selected,
     required bool showLabel,
+    required bool compact,
     required Widget preview,
     required VoidCallback onPressed,
     required Widget options,
@@ -1242,7 +1183,9 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                 child: InkWell(
                   onTap: onPressed,
                   child: Padding(
-                    padding: const EdgeInsets.only(left: 5, right: 4),
+                    padding: compact
+                        ? EdgeInsets.zero
+                        : const EdgeInsets.only(left: 5, right: 4),
                     child: SizedBox(
                       height: 36,
                       child: Row(
@@ -1531,9 +1474,10 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
         : null,
   );
 
-  Widget _statusBar(InkNote note) {
+  Widget _statusBar(InkNote? note) {
     final scheme = Theme.of(context).colorScheme;
-    final (icon, text) = switch (_status) {
+    final windowed = _mode == _DeskMode.windowed;
+    final (statusIcon, statusLabel) = switch (_status) {
       _SaveStatus.saving => (Icons.sync, 'Đang lưu'),
       _SaveStatus.saved => (
         Icons.check_circle_outline_rounded,
@@ -1541,45 +1485,136 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       ),
       _SaveStatus.failed => (Icons.error_outline_rounded, 'Lưu thất bại'),
     };
+    Widget action(IconData icon, String tooltip, VoidCallback? onPressed) =>
+        _shelfIcon(
+          IconButton(
+            tooltip: tooltip,
+            onPressed: onPressed,
+            icon: Icon(icon, size: 18),
+          ),
+        );
+
     return Container(
-      height: 43,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      height: 40,
+      padding: const EdgeInsets.symmetric(horizontal: 9),
       decoration: BoxDecoration(
         color: scheme.surface,
         border: Border(top: BorderSide(color: scheme.outlineVariant)),
       ),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: scheme.primary),
-          const SizedBox(width: 7),
-          Text(
-            text,
-            style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant),
+          Expanded(
+            child: note == null
+                ? const SizedBox.shrink()
+                : Row(
+                    children: [
+                      if (!_present) ...[
+                        if (_status == _SaveStatus.failed)
+                          action(statusIcon, '$statusLabel · Thử lại', _save)
+                        else
+                          Tooltip(
+                            message: statusLabel,
+                            child: Icon(
+                              statusIcon,
+                              size: 16,
+                              color: scheme.primary,
+                            ),
+                          ),
+                        const SizedBox(width: 7),
+                      ],
+                      Flexible(
+                        child: Tooltip(
+                          message: note.title,
+                          child: Text(
+                            note.title,
+                            overflow: TextOverflow.ellipsis,
+                            maxLines: 1,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: scheme.onSurfaceVariant,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
           ),
-          if (_status == _SaveStatus.failed)
-            TextButton(onPressed: _save, child: const Text('Thử lại')),
-          const Spacer(),
-          IconButton(
-            tooltip: 'Thu nhỏ',
-            onPressed: () => _changeZoom(note, note.zoom / 1.18),
-            icon: const Icon(Icons.remove_rounded, size: 18),
-          ),
-          SizedBox(
-            width: 48,
-            child: Text(
-              '${(note.zoom * 100).round()}%',
-              textAlign: TextAlign.center,
+          if (_present) ...[
+            _shelfIcon(
+              _toolButton(
+                Icons.lens_blur,
+                'Laser',
+                _tool == Tool.laser,
+                () => _setTool(Tool.laser),
+              ),
             ),
-          ),
-          IconButton(
-            tooltip: 'Phóng to',
-            onPressed: () => _changeZoom(note, note.zoom * 1.18),
-            icon: const Icon(Icons.add_rounded, size: 18),
-          ),
-          TextButton(
-            onPressed: () => _canvas.currentState?.fitWidth(),
-            child: const Text('Vừa chiều rộng'),
-          ),
+            _shelfIcon(
+              _toolButton(
+                Icons.pan_tool_outlined,
+                'Cuộn',
+                _tool == Tool.hand,
+                () => _setTool(Tool.hand),
+              ),
+            ),
+            action(
+              Icons.fullscreen_exit_rounded,
+              'Thoát trình bày (Esc)',
+              () => _changeMode(_DeskMode.windowed),
+            ),
+          ] else ...[
+            if (note != null) ...[
+              action(
+                Icons.remove_rounded,
+                'Thu nhỏ',
+                () => _changeZoom(note, note.zoom / 1.18),
+              ),
+              SizedBox(
+                width: 43,
+                child: Text(
+                  '${(note.zoom * 100).round()}%',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+              action(
+                Icons.add_rounded,
+                'Phóng to',
+                () => _changeZoom(note, note.zoom * 1.18),
+              ),
+              action(
+                Icons.fit_screen_outlined,
+                'Vừa chiều rộng',
+                () => _canvas.currentState?.fitWidth(),
+              ),
+              _shelfDivider(),
+              action(
+                Icons.picture_as_pdf_outlined,
+                'Xuất PDF',
+                _busy ? null : _export,
+              ),
+              action(
+                Icons.slideshow_rounded,
+                'Trình bày với laser',
+                () => _changeMode(_DeskMode.presentation),
+              ),
+              action(
+                windowed
+                    ? Icons.fullscreen_rounded
+                    : Icons.fullscreen_exit_rounded,
+                windowed
+                    ? 'Viết toàn màn hình (F11)'
+                    : 'Thoát toàn màn hình (F11)',
+                _toggleFullScreen,
+              ),
+            ],
+            action(
+              widget.dark
+                  ? Icons.light_mode_outlined
+                  : Icons.dark_mode_outlined,
+              widget.dark ? 'Giao diện sáng' : 'Giao diện tối',
+              widget.onTheme,
+            ),
+          ],
         ],
       ),
     );

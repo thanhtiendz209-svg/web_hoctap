@@ -10,7 +10,7 @@ import 'package:ink_study/model.dart';
 
 void main() {
   testWidgets(
-    'editing tools remain usable in full screen and at laptop width',
+    'one Windows ribbon and footer remain usable in full screen and at laptop width',
     (tester) async {
       const pathProvider = MethodChannel('plugins.flutter.io/path_provider');
       const windowManager = MethodChannel('window_manager');
@@ -50,6 +50,7 @@ void main() {
           const InkNote(id: 'desk-fixture', title: 'Bài ghi chú kiểm thử'),
         ]);
         await tester.pumpWidget(const InkStudyApp());
+        expect(find.byTooltip('Đóng cửa sổ'), findsOneWidget);
         final timeout = DateTime.now().add(const Duration(seconds: 5));
         while (canvasFinder.evaluate().isEmpty &&
             DateTime.now().isBefore(timeout)) {
@@ -61,6 +62,12 @@ void main() {
 
       InkCanvas canvas() => tester.widget<InkCanvas>(canvasFinder);
       expect(find.text('Thư viện'), findsOneWidget);
+      expect(find.text('Ink Study'), findsNothing);
+      expect(
+        tester.getTopLeft(find.byTooltip('Xuất PDF')).dy,
+        greaterThanOrEqualTo(tester.getBottomLeft(canvasFinder).dy),
+      );
+      expect(find.text('Xuất PDF'), findsNothing);
       expect(canvas().penKind, PenKind.ballpoint);
 
       await tester.tap(find.byTooltip('Bút bi · màu và độ dày'));
@@ -100,8 +107,12 @@ void main() {
       tester.view.physicalSize = const Size(690, 470);
       await tester.pumpAndSettle();
       expect(tester.takeException(), isNull);
-      expect(find.text('Gôm'), findsOneWidget);
-      expect(find.text('Chọn vùng'), findsOneWidget);
+      expect(find.byTooltip('Tẩy một phần nét'), findsOneWidget);
+      expect(
+        find.byTooltip('Chọn vùng · Shift + kéo để chọn nhanh'),
+        findsOneWidget,
+      );
+      expect(find.byTooltip('Ẩn thư viện'), findsOneWidget);
       await tester.tap(find.byTooltip('Bút bi'));
       await tester.pumpAndSettle();
       expect(canvas().tool, Tool.pen);
@@ -114,9 +125,13 @@ void main() {
       await tester.tap(find.text('Mũi tên'));
       await tester.pumpAndSettle();
       expect(canvas().tool, Tool.shape);
+      final dragArea = tester.getRect(
+        find.byKey(const ValueKey('window-drag-area')),
+      );
+      expect(dragArea.width, greaterThanOrEqualTo(28));
       expect(
         tester.getRect(find.byTooltip('Làm lại · Ctrl+Y')).right,
-        lessThanOrEqualTo(690),
+        lessThanOrEqualTo(dragArea.left),
       );
       await tester.tap(find.byTooltip('Kiểu nét hình'));
       await tester.pumpAndSettle();
@@ -125,7 +140,22 @@ void main() {
       expect(canvas().tool, Tool.shape);
       expect(canvas().color, const Color(0xff3474cf));
 
+      await tester.tap(find.byTooltip('Trình bày với laser'));
+      await tester.pumpAndSettle();
+      expect(canvas().tool, Tool.laser);
+      expect(find.byTooltip('Đóng cửa sổ'), findsNothing);
+      expect(find.byTooltip('Tẩy một phần nét'), findsNothing);
+      await tester.tap(find.byTooltip('Cuộn'));
+      await tester.pumpAndSettle();
+      expect(canvas().tool, Tool.hand);
+      await tester.tap(find.byTooltip('Thoát trình bày (Esc)'));
+      await tester.pumpAndSettle();
+      expect(canvas().tool, Tool.shape);
+      expect(find.byTooltip('Đóng cửa sổ'), findsOneWidget);
+      expect(find.byTooltip('Xuất PDF'), findsOneWidget);
+
       await tester.pumpWidget(const SizedBox());
     },
+    variant: TargetPlatformVariant({TargetPlatform.windows}),
   );
 }
