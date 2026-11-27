@@ -131,9 +131,9 @@ try {
     # below determines whether the required Windows toolchain is available.
     & flutter doctor -v
     Invoke-Checked 'flutter' @('pub', 'get')
-    Invoke-Checked 'flutter' @('analyze')
-    Invoke-Checked 'flutter' @('test')
-    Invoke-Checked 'flutter' @('build', 'windows', '--release', '--target-platform=windows-x64')
+    Invoke-Checked 'flutter' @('analyze', '--no-pub')
+    Invoke-Checked 'flutter' @('test', '--no-pub')
+    Invoke-Checked 'flutter' @('build', 'windows', '--release', '--no-pub')
 
     $releaseDir = Join-Path $projectDir 'build/windows/x64/runner/Release'
     if (-not (Test-Path -LiteralPath (Join-Path $releaseDir 'ink_study.exe'))) {
