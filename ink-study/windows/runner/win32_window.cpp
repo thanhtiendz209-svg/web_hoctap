@@ -150,7 +150,9 @@ bool Win32Window::Create(const std::wstring& title,
 }
 
 bool Win32Window::Show() {
-  return ShowWindow(window_handle_, SW_SHOWNORMAL);
+  // The first Flutter frame can arrive after window_manager has maximized the
+  // window. Keep its current size and state when making it visible.
+  return ShowWindow(window_handle_, SW_SHOW);
 }
 
 // static
