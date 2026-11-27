@@ -8,26 +8,10 @@
   <title>Ink Study</title>
   <link rel="icon" href="./icons/favicon.ico">
   <link rel="apple-touch-icon" href="./icons/app-icon.png">
-  <link rel="stylesheet" href="./editor.css?v=0.3.0">
-  <script type="module" src="./app.js?v=0.3.0"></script>
+  <link rel="stylesheet" href="./editor.css?v=0.3.1">
+  <script type="module" src="./app.js?v=0.3.1"></script>
 </head>
 <body>
-  <header class="titlebar">
-    <div class="heading">
-      <a class="brand" href="./" aria-label="Ink Study">
-        <img src="./icons/app-icon.png" alt="" width="32" height="32">
-        <span>Ink Study</span>
-      </a>
-      <span class="title-rule"></span>
-      <input class="note-title" id="title" aria-label="Tên ghi chú" maxlength="100" value="Ghi chú mới">
-    </div>
-    <div class="title-actions">
-      <button class="tool icon-only" id="new" data-icon="new" title="Tạo ghi chú" aria-label="Tạo ghi chú"></button>
-      <button class="tool icon-only" id="fullscreen" data-icon="fullscreen" title="Toàn màn hình" aria-label="Toàn màn hình"></button>
-      <button class="tool export" id="export" data-icon="download" aria-label="Xuất PNG"><span>Xuất PNG</span></button>
-    </div>
-  </header>
-
   <nav class="ribbon" aria-label="Công cụ viết và vẽ">
     <div class="toolbar">
       <div class="tool-group history">
@@ -64,7 +48,10 @@
     </div>
   </main>
   <footer class="statusbar">
-    <span class="save-status" id="save-status" data-icon="check" role="status">Đã lưu trên thiết bị</span>
+    <div class="note-meta">
+      <input class="note-title" id="title" aria-label="Tên ghi chú" title="Đổi tên ghi chú" maxlength="100" value="Ghi chú mới">
+      <span class="save-status" id="save-status" data-icon="check" role="status" title="Đã lưu trên thiết bị"><span>Đã lưu trên thiết bị</span></span>
+    </div>
     <div class="view-actions">
       <label class="paper-picker">
         <span data-icon="paper" aria-hidden="true"></span>
@@ -80,6 +67,11 @@
         <button class="tool icon-only" id="zoom-out" data-icon="minus" title="Thu nhỏ trang" aria-label="Thu nhỏ trang"></button>
         <button class="tool zoom-fit" id="zoom-fit" title="Vừa chiều rộng" aria-label="Vừa chiều rộng">100%</button>
         <button class="tool icon-only" id="zoom-in" data-icon="plus" title="Phóng to trang" aria-label="Phóng to trang"></button>
+      </div>
+      <div class="tool-group document-actions">
+        <button class="tool icon-only" id="new" data-icon="new" title="Tạo ghi chú" aria-label="Tạo ghi chú"></button>
+        <button class="tool icon-only" id="fullscreen" data-icon="fullscreen" title="Toàn màn hình" aria-label="Toàn màn hình"></button>
+        <button class="tool icon-only" id="export" data-icon="download" title="Xuất PNG" aria-label="Xuất PNG"></button>
       </div>
     </div>
   </footer>

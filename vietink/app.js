@@ -63,9 +63,13 @@ function renderState(next) {
   $('selection-strip').hidden = next.selectedCount === 0;
   $('selection-count').textContent = `Đã chọn ${next.selectedCount} đối tượng`;
   if (next.selectedCount && mode !== 'select') activate('select');
-  $('save-status').lastChild.textContent = next.saved
+  const saveStatus = $('save-status');
+  const message = next.saved
     ? 'Đã lưu trên thiết bị'
     : next.saveError ? 'Chưa lưu được' : 'Đang lưu…';
+  saveStatus.lastElementChild.textContent = message;
+  saveStatus.title = message;
+  saveStatus.dataset.state = next.saveError ? 'error' : next.saved ? 'saved' : 'saving';
 }
 
 const editor = createEditor(canvas, {

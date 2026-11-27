@@ -17,7 +17,7 @@ body {
   height: 100dvh;
   margin: 0;
   display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  grid-template-rows: auto minmax(0, 1fr) auto;
   overflow: hidden;
 }
 button, input, select { font: inherit; color: inherit; }
@@ -28,33 +28,13 @@ button:focus-visible, input:focus-visible, select:focus-visible, a:focus-visible
   outline-offset: 2px;
 }
 svg { display: block; flex: none; }
-.titlebar, .statusbar, .ribbon, .heading, .title-actions, .toolbar, .tool-group, .view-actions {
+.statusbar, .ribbon, .note-meta, .toolbar, .tool-group, .view-actions {
   display: flex;
   align-items: center;
 }
-.titlebar {
-  justify-content: space-between;
-  gap: .8rem;
-  padding: .62rem clamp(.75rem, 2.4vw, 2rem);
-  background: var(--chrome);
-}
-.heading { min-width: 0; gap: .85rem; }
-.brand {
-  display: flex;
-  align-items: center;
-  gap: .54rem;
-  flex: none;
-  text-decoration: none;
-  color: #182d36;
-  font-size: 1.03rem;
-  font-weight: 730;
-  letter-spacing: -.03em;
-  white-space: nowrap;
-}
-.brand img { display: block; }
-.title-rule { height: 20px; width: 1px; background: #d5e2e6; flex: none; }
+.note-meta { min-width: 0; gap: .5rem; }
 .note-title {
-  width: clamp(7rem, 26vw, 22rem);
+  width: clamp(7rem, 20vw, 18rem);
   min-width: 0;
   background: transparent;
   border: 1px solid transparent;
@@ -65,7 +45,6 @@ svg { display: block; flex: none; }
   text-overflow: ellipsis;
 }
 .note-title:hover { border-color: var(--line); }
-.title-actions { gap: .34rem; }
 .tool {
   height: 2.25rem;
   display: inline-flex;
@@ -89,8 +68,6 @@ svg { display: block; flex: none; }
 .tool[aria-expanded="true"] { color: var(--teal); background: var(--active); }
 .tool.icon-only { width: 2.25rem; padding: 0; }
 .tool svg { width: 1.13rem; height: 1.13rem; }
-.export { background: #173e41; color: #fff; padding: 0 .8rem; }
-.export:not(:disabled):hover { background: #245456; }
 .ribbon {
   justify-content: safe center;
   overflow-x: auto;
@@ -98,7 +75,6 @@ svg { display: block; flex: none; }
   padding: .38rem .65rem;
   min-height: 3.38rem;
   background: var(--surface);
-  border-top: 1px solid var(--line);
   border-bottom: 1px solid #ccdbe2;
 }
 .toolbar { flex: none; gap: .47rem; }
@@ -167,9 +143,12 @@ svg { display: block; flex: none; }
   background: var(--chrome);
   border-top: 1px solid var(--line);
 }
-.save-status { display: flex; align-items: center; gap: .38rem; color: var(--muted); font-size: .8rem; }
+.save-status { display: flex; align-items: center; gap: .38rem; color: var(--muted); font-size: .8rem; white-space: nowrap; }
 .save-status svg { width: 1rem; height: 1rem; color: #2a8272; }
-.view-actions { gap: .85rem; }
+.save-status[data-state="error"] svg { color: #a4263c; }
+.view-actions { gap: .48rem; flex: none; }
+.document-actions { border-left: 1px solid var(--line); padding-left: .4rem; }
+.document-actions .tool { width: 2rem; height: 2rem; }
 .paper-picker {
   display: flex;
   align-items: center;
@@ -197,7 +176,7 @@ svg { display: block; flex: none; }
   position: fixed;
   z-index: 5;
   width: min(19rem, calc(100vw - 1rem));
-  max-height: calc(100dvh - 6.7rem);
+  max-height: calc(100dvh - 4.15rem);
   overflow: auto;
   background: var(--surface);
   border: 1px solid var(--line);
@@ -238,19 +217,28 @@ svg { display: block; flex: none; }
 .shape-type { display: flex; justify-content: flex-start; width: 100%; }
 @media (max-width: 710px) {
   .quick-colors { display: none; }
-  .titlebar { padding: .42rem .48rem; }
-  .heading { gap: .42rem; }
-  .brand img { width: 29px; height: 29px; }
-  .title-actions { gap: .14rem; }
+  .save-status > span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    clip-path: inset(50%);
+    overflow: hidden;
+  }
+  .note-meta { gap: .2rem; }
 }
 @media (max-width: 485px) {
-  .export span { display: none; }
-  .export { width: 2.25rem; padding: 0; }
   .toolbar { gap: .18rem; }
   .toolbar .tool-group + .tool-group { padding-left: .18rem; }
   .writing .tool span, .editing .tool span, .drawing .tool span { display: none; }
   .tool:not(.shape-type) { padding-inline: .38rem; }
   .tool-group { gap: .06rem; }
-  .statusbar { padding-inline: .48rem; }
-  .view-actions { gap: .38rem; }
+  .statusbar { padding-inline: .34rem; gap: .24rem; }
+  .view-actions { gap: .25rem; }
+  .document-actions { padding-left: .22rem; }
+  .note-title { padding-inline: .3rem; }
+}
+@media (max-width: 395px) {
+  .paper-picker span:last-child { display: none; }
+  .paper-picker select { min-width: 0; width: 2rem; padding: 0; color: transparent; }
+  .paper-picker option { color: #20333e; }
 }
