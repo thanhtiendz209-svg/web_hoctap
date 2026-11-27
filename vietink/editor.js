@@ -857,7 +857,7 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
       if (!tools.has(next) || next === tool) return;
       cancelInteraction();
       tool = next;
-      if (next !== 'select' && next !== 'pan') selection = new Set();
+      if (next !== 'select') selection = new Set();
       changed();
     },
     setBrush({ color, width: size, dashed }) {
