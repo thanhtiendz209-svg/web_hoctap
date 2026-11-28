@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:isolate';
 import 'dart:math' as math;
 import 'dart:typed_data';
 import 'dart:ui' as ui;
 
+import 'package:archive/archive_io.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:pdf/pdf.dart';
@@ -25,10 +27,17 @@ class InkStore {
   static final _invalidFilename = RegExp(r'[<>:"/\\|?*\x00-\x1f]');
   static final _random = math.Random.secure();
   static const _pdfType = XTypeGroup(label: 'PDF', extensions: <String>['pdf']);
+  static const _noteType = XTypeGroup(
+    label: 'Ghi chú Ink Study',
+    extensions: <String>['inkstudy'],
+  );
   static const _imageType = XTypeGroup(
     label: 'Ảnh',
     extensions: <String>['png', 'jpg', 'jpeg', 'bmp', 'webp', 'gif'],
   );
+  static const _noteFile = 'note.json';
+  static const _backupFormat = 'ink-study-note';
+  static const _maxMetadataBytes = 64 * 1024 * 1024;
 
   int _revision = 0;
   Future<void> _writeTail = Future<void>.value();
@@ -113,6 +122,232 @@ class InkStore {
     // A failed write must not prevent later saves in the same session.
     _writeTail = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
     return next;
+  }
+
+  File get _pensFile =>
+      File('${_directory.path}${Platform.pathSeparator}pens.json');
+  Future<void> _penWrites = Future<void>.value();
+
+  Future<({List<PenPreset> pens, int active})?> loadPens() async {
+    await _penWrites;
+    final file = _pensFile;
+    if (!await file.exists()) return null;
+    try {
+      final data =
+          jsonDecode(await file.readAsString()) as Map<String, dynamic>;
+      final pens = (data['pens'] as List)
+          .map((item) => PenPreset.fromJson(item as Map<String, dynamic>))
+          .toList();
+      if (pens.isEmpty) return null;
+      final active = data['active'];
+      return (
+        pens: pens,
+        active: active is int ? active.clamp(0, pens.length - 1) : 0,
+      );
+    } on FormatException {
+      return null;
+    } on TypeError {
+      return null;
+    }
+  }
+
+  Future<void> savePens(List<PenPreset> pens, int active) {
+    final bytes = utf8.encode(
+      jsonEncode({
+        'pens': pens.map((pen) => pen.toJson()).toList(),
+        'active': active,
+      }),
+    );
+    final next = _penWrites.then((_) => _writeAtomically(_pensFile, bytes));
+    _penWrites = next.then<void>((_) {}, onError: (Object _, StackTrace _) {});
+    return next;
+  }
+
+  static Set<String> _noteAssets(InkDocument document) {
+    final names = {
+      if (document.pdfAsset != null) document.pdfAsset!,
+      for (final image in document.images) image.asset,
+    };
+    if (names.any((name) => !_assetName.hasMatch(name))) {
+      throw const FormatException(
+        'Tên tài nguyên trong bản sao lưu không hợp lệ.',
+      );
+    }
+    return names;
+  }
+
+  Future<bool> exportNote(InkNote note, {String? path}) async {
+    if (path == null) {
+      final location = await getSaveLocation(
+        suggestedName:
+            '${note.title.replaceAll(_invalidFilename, '-').trim()}.inkstudy',
+        acceptedTypeGroups: const [_noteType],
+      );
+      if (location == null) return false;
+      path = location.path;
+    }
+    final target = path.toLowerCase().endsWith('.inkstudy')
+        ? path
+        : '$path.inkstudy';
+    final files = {
+      for (final name in _noteAssets(note.document))
+        name: _assetFile(name).path,
+    };
+    final finalPath = target;
+    await Isolate.run(() => _writeBackup(finalPath, note, files));
+    return true;
+  }
+
+  static Future<void> _writeBackup(
+    String target,
+    InkNote note,
+    Map<String, String> files,
+  ) async {
+    final data = utf8.encode(
+      jsonEncode({
+        'format': _backupFormat,
+        'version': 1,
+        'note': note.toJson(),
+      }),
+    );
+    if (data.length > _maxMetadataBytes) {
+      throw const FormatException('Ghi chú quá lớn để sao lưu thành một tệp.');
+    }
+    final temporary = File('$target.${_token()}.tmp');
+    try {
+      final encoder = ZipFileEncoder()..create(temporary.path, level: 1);
+      try {
+        encoder.addArchiveFile(ArchiveFile.bytes(_noteFile, data));
+        for (final entry in files.entries) {
+          final file = File(entry.value);
+          if (!await file.exists()) {
+            throw const FormatException(
+              'Ghi chú đang thiếu ảnh hoặc PDF đính kèm.',
+            );
+          }
+          await encoder.addFile(
+            file,
+            'assets/${entry.key}',
+            ZipFileEncoder.store,
+          );
+        }
+      } finally {
+        await encoder.close();
+      }
+      await temporary.rename(target);
+    } finally {
+      if (await temporary.exists()) await temporary.delete();
+    }
+  }
+
+  Future<InkNote?> importNote({String? path}) async {
+    if (path == null) {
+      final source = await openFile(acceptedTypeGroups: const [_noteType]);
+      if (source == null) return null;
+      path = source.path;
+    }
+    final sourcePath = path;
+    final assetsPath = _assetsDirectory.path;
+    return Isolate.run(() => _readBackup(sourcePath, assetsPath));
+  }
+
+  static Future<InkNote> _readBackup(String path, String assetsPath) async {
+    final source = InputFileStream(path);
+    final importedFiles = <File>[];
+    try {
+      final archive = ZipDecoder().decodeStream(source, verify: true);
+      final metadata = archive.findFile(_noteFile);
+      if (metadata == null ||
+          !metadata.isFile ||
+          metadata.isSymbolicLink ||
+          metadata.size > _maxMetadataBytes) {
+        throw const FormatException(
+          'Thiếu nội dung ghi chú trong bản sao lưu.',
+        );
+      }
+      final envelope =
+          jsonDecode(utf8.decode(metadata.content)) as Map<String, dynamic>;
+      if (envelope['format'] != _backupFormat || envelope['version'] != 1) {
+        throw const FormatException('Định dạng bản sao lưu không được hỗ trợ.');
+      }
+      final noteData = envelope['note'] as Map<String, dynamic>;
+      if (noteData['document'] is! Map<String, dynamic>) {
+        throw const FormatException('Bản sao lưu thiếu dữ liệu trang viết.');
+      }
+      final note = InkNote.fromJson(noteData);
+      final document = note.document;
+      if (document.strokes.any(
+            (stroke) => stroke.points.any((point) => !point.position.isFinite),
+          ) ||
+          document.shapes.any(
+            (shape) => !shape.start.isFinite || !shape.end.isFinite,
+          ) ||
+          document.images.any(
+            (image) => !image.bounds.isFinite || image.bounds.isEmpty,
+          ) ||
+          document.pdfPages.any(
+            (page) =>
+                page.width <= 0 ||
+                page.height <= 0 ||
+                !(page.height / page.width).isFinite,
+          ) ||
+          document.pdfRegions.any(
+            (region) =>
+                region.page < 0 ||
+                region.page >= document.pdfPages.length ||
+                !region.source.isFinite ||
+                region.source.isEmpty ||
+                !region.bounds.isFinite ||
+                region.bounds.isEmpty,
+          )) {
+        throw const FormatException(
+          'Tọa độ hoặc kích thước trang viết bị hỏng.',
+        );
+      }
+      final replacements = <String, String>{};
+      for (final name in _noteAssets(document)) {
+        final entry = archive.findFile('assets/$name');
+        if (entry == null ||
+            !entry.isFile ||
+            entry.isSymbolicLink ||
+            entry.size <= 0) {
+          throw const FormatException('Bản sao lưu bị thiếu ảnh hoặc PDF.');
+        }
+        final extension = name.substring(name.lastIndexOf('.') + 1);
+        final newName = '${_token()}.$extension';
+        final file = File('$assetsPath${Platform.pathSeparator}$newName');
+        importedFiles.add(file);
+        final output = OutputFileStream(file.path);
+        try {
+          entry.writeContent(output);
+        } finally {
+          await output.close();
+        }
+        if (await file.length() != entry.size) {
+          throw const FormatException(
+            'Ảnh hoặc PDF trong bản sao lưu bị hỏng.',
+          );
+        }
+        replacements[name] = newName;
+      }
+      return note.copyWith(
+        id: _token(),
+        document: document.copyWith(
+          images: [
+            for (final image in document.images)
+              image.copyWith(asset: replacements[image.asset]!),
+          ],
+          pdfAsset: replacements[document.pdfAsset],
+        ),
+      );
+    } catch (_) {
+      for (final file in importedFiles) {
+        if (await file.exists()) await file.delete();
+      }
+      rethrow;
+    } finally {
+      await source.close();
+    }
   }
 
   Future<({String asset, List<PdfPageInfo> pages})?> importPdf() async {

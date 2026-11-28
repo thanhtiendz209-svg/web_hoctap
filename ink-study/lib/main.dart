@@ -127,26 +127,27 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   final _notes = <InkNote>[];
   final _histories = <String, _History>{};
   final _filter = TextEditingController();
-  final _pens = <PenKind, PenSettings>{
-    PenKind.ballpoint: (_initialInk, 2.8, false),
-    PenKind.fountain: (const Color(0xff3474cf), 6.0, false),
-    PenKind.pencil: (const Color(0xff4b637c), 2.0, false),
-    PenKind.highlighter: (const Color(0xffefb531), 15.0, false),
-  };
+  final _pens = <PenPreset>[
+    const PenPreset(color: _initialInk),
+    const PenPreset(kind: PenKind.fountain, color: Color(0xff3474cf), width: 6),
+    const PenPreset(color: Color(0xffd54260)),
+  ];
+  final _penScroll = ScrollController();
 
   InkStore? _store;
   Object? _startupError;
   String? _activeId;
   GlobalKey<InkCanvasState> _canvas = GlobalKey<InkCanvasState>();
   Timer? _saveTimer;
+  Timer? _penSaveTimer;
   Future<void> _pendingSave = Future<void>.value();
   int _revision = 0;
   int _idSuffix = 0;
   _SaveStatus _status = _SaveStatus.saved;
   Tool _tool = Tool.pen;
-  PenKind _pen = PenKind.ballpoint;
+  int _penIndex = 0;
   ShapeKind _shape = ShapeKind.line;
-  PenSettings _shapeStyle = (_initialInk, 2.8, false);
+  PenPreset _shapeStyle = const PenPreset(color: _initialInk);
   bool _rail = true;
   _DeskMode _mode = _DeskMode.windowed;
   Tool _beforePresentation = Tool.pen;
@@ -187,6 +188,8 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   @override
   void dispose() {
     _saveTimer?.cancel();
+    _penSaveTimer?.cancel();
+    _penScroll.dispose();
     _filter.dispose();
     if (Platform.isWindows) windowManager.removeListener(this);
     super.dispose();
@@ -198,6 +201,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     try {
       final store = await InkStore.open();
       final notes = await store.load();
+      final palette = await store.loadPens();
       if (!mounted) return;
       setState(() {
         _store = store;
@@ -205,9 +209,16 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           ..clear()
           ..addAll(notes);
         _activeId = _notes.firstOrNull?.id;
+        if (palette != null) {
+          _pens
+            ..clear()
+            ..addAll(palette.pens);
+          _penIndex = palette.active;
+        }
         _startupError = null;
       });
       if (_notes.isEmpty) _addNote('Ghi chú mới', 'Sổ học tập');
+      _revealActivePen();
     } catch (error) {
       if (mounted) setState(() => _startupError = error);
     }
@@ -224,12 +235,15 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     _scheduleSave();
   }
 
-  void _addNote(String title, String notebook) {
-    final note = InkNote(
-      id: '${DateTime.now().microsecondsSinceEpoch}-${_idSuffix++}',
-      title: title,
-      notebook: notebook,
-    );
+  String _newNoteId() =>
+      '${DateTime.now().microsecondsSinceEpoch}-${_idSuffix++}';
+
+  void _addNote(String title, String notebook) =>
+      _openNewNote(InkNote(id: _newNoteId(), title: title, notebook: notebook));
+
+  void _openNewNote(InkNote note) {
+    _finishRegion(null);
+    _filter.clear();
     setState(() {
       _notes.insert(0, note);
       _activeId = note.id;
@@ -311,7 +325,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   Future<void> onWindowClose() async {
     if (_closing) return;
     _closing = true;
-    await _save();
+    await Future.wait([_save(), _savePens()]);
     if (!mounted) return;
     if (_status == _SaveStatus.failed) {
       _closing = false;
@@ -396,6 +410,41 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     if (!mounted || name == null) return;
     final index = _notes.indexWhere((entry) => entry.id == note.id);
     if (index >= 0) _replaceNote(_notes[index].copyWith(title: name));
+  }
+
+  void _duplicate(InkNote note) {
+    _openNewNote(
+      note.copyWith(id: _newNoteId(), title: '${note.title} (bản sao)'),
+    );
+  }
+
+  Future<void> _backup({InkNote? note}) async {
+    final store = _store;
+    if (_busy || store == null) return;
+    setState(() => _busy = true);
+    try {
+      if (note != null) {
+        if (await store.exportNote(note)) _toast('Đã lưu tệp .inkstudy.');
+      } else {
+        final imported = await store.importNote();
+        if (!mounted || imported == null) return;
+        _openNewNote(imported);
+        await _save();
+        if (_status == _SaveStatus.saved) {
+          _toast('Đã nhập ghi chú vào thư viện.');
+        }
+      }
+    } catch (error) {
+      _toast(
+        error is FormatException
+            ? error.message
+            : note == null
+            ? 'Không mở được bản sao lưu. Kiểm tra tệp .inkstudy rồi thử lại.'
+            : 'Không lưu được bản sao lưu. Kiểm tra thư mục đích rồi thử lại.',
+      );
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
   }
 
   Future<void> _delete(InkNote note) async {
@@ -687,13 +736,72 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
 
   void _setTool(Tool tool) => setState(() => _tool = tool);
 
-  void _setPen(PenKind? pen, {Color? color, double? width, bool? dashed}) {
+  void _choosePen(int index) {
+    if (_tool == Tool.pen && _penIndex == index) return;
     setState(() {
-      _pen = pen ?? _pen;
-      final (oldColor, oldWidth, oldDash) = _pens[_pen]!;
-      _pens[_pen] = (color ?? oldColor, width ?? oldWidth, dashed ?? oldDash);
+      _penIndex = index;
       _tool = Tool.pen;
     });
+    _queuePenSave();
+  }
+
+  void _updatePen(
+    int index, {
+    PenKind? kind,
+    Color? color,
+    double? width,
+    bool? dashed,
+  }) {
+    setState(() {
+      _pens[index] = _pens[index].copyWith(
+        kind: kind,
+        color: color,
+        width: width,
+        dashed: dashed,
+      );
+      _penIndex = index;
+      _tool = Tool.pen;
+    });
+    _queuePenSave();
+  }
+
+  void _addPen() {
+    setState(() {
+      _pens.add(PenPreset(color: _palette[_pens.length % _palette.length]));
+      _penIndex = _pens.length - 1;
+      _tool = Tool.pen;
+    });
+    _queuePenSave();
+    _revealActivePen();
+  }
+
+  void _revealActivePen() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && _penScroll.hasClients) {
+        final position = _penScroll.position;
+        final left = _penIndex * 34.0;
+        final right = left + 34.0;
+        final next = position.pixels
+            .clamp(right - position.viewportDimension, left)
+            .clamp(0.0, position.maxScrollExtent)
+            .toDouble();
+        if (next != position.pixels) _penScroll.jumpTo(next);
+      }
+    });
+  }
+
+  void _queuePenSave() {
+    _penSaveTimer?.cancel();
+    _penSaveTimer = Timer(const Duration(milliseconds: 320), _savePens);
+  }
+
+  Future<void> _savePens() async {
+    _penSaveTimer?.cancel();
+    try {
+      await _store?.savePens(_pens, _penIndex);
+    } catch (_) {
+      _toast('Không thể lưu bộ bút. Hãy kiểm tra dung lượng ổ đĩa.');
+    }
   }
 
   Future<void> _customColor(Color current, ValueChanged<Color> onColor) async {
@@ -938,15 +1046,33 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                             ),
                             trailing: PopupMenuButton<String>(
                               tooltip: 'Tùy chọn ghi chú',
-                              onSelected: (action) => action == 'rename'
-                                  ? _rename(note)
-                                  : _delete(note),
-                              itemBuilder: (_) => const [
-                                PopupMenuItem(
+                              onSelected: (action) {
+                                switch (action) {
+                                  case 'rename':
+                                    unawaited(_rename(note));
+                                  case 'duplicate':
+                                    _duplicate(note);
+                                  case 'backup':
+                                    unawaited(_backup(note: note));
+                                  case 'delete':
+                                    unawaited(_delete(note));
+                                }
+                              },
+                              itemBuilder: (_) => [
+                                const PopupMenuItem(
                                   value: 'rename',
                                   child: Text('Đổi tên'),
                                 ),
+                                const PopupMenuItem(
+                                  value: 'duplicate',
+                                  child: Text('Nhân bản ghi chú'),
+                                ),
                                 PopupMenuItem(
+                                  value: 'backup',
+                                  enabled: !_busy,
+                                  child: const Text('Sao lưu ghi chú'),
+                                ),
+                                const PopupMenuItem(
                                   value: 'delete',
                                   child: Text('Xóa'),
                                 ),
@@ -1009,22 +1135,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                       ),
                       child: Row(
                         children: [
-                          _penButton(
-                            note,
-                            showLabel: showLabels,
-                            compact: compact,
-                          ),
-                          if (toolWidth >= 920) ...[
-                            const SizedBox(width: 6),
-                            for (var index = 0; index < 5; index++)
-                              InkColorSwatch(
-                                color: _palette[index],
-                                label: 'Màu nhanh · ${_inkNames[index]}',
-                                selected: _pens[_pen]!.$1 == _palette[index],
-                                onTap: () =>
-                                    _setPen(_pen, color: _palette[index]),
-                              ),
-                          ],
+                          _penStrip(note, compact: compact),
                           _shelfDivider(),
                           _eraserButton(compact: compact),
                           if (compact)
@@ -1044,6 +1155,14 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                               _tool == Tool.select,
                               () => _setTool(Tool.select),
                             ),
+                          _shelfIcon(
+                            _toolButton(
+                              Icons.lens_blur,
+                              'Laser',
+                              _tool == Tool.laser,
+                              () => _setTool(Tool.laser),
+                            ),
+                          ),
                           _shelfDivider(),
                           ..._shelfActions(note, showLabels: showLabels),
                         ],
@@ -1088,39 +1207,81 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
 
   double _eraserSize = defaultEraserWidth;
 
-  Widget _penButton(
-    InkNote note, {
-    required bool showLabel,
-    required bool compact,
-  }) {
-    final scheme = Theme.of(context).colorScheme;
-    final kind = _pen;
-    final (color, _, _) = _pens[kind]!;
-    final label = penLabel(kind);
-    return _shelfSplitTool(
-      label: label,
-      tooltip: label,
-      selected: _tool == Tool.pen,
-      showLabel: showLabel,
-      compact: compact,
-      preview: ToolNibPreview(
-        pen: kind,
-        color: color,
-        outline: scheme.onSurface,
-      ),
-      onPressed: () => _setPen(kind),
-      options: ToolOptionsMenu(
-        label: 'Chỉnh bút',
-        panel: PenOptionsPanel(
-          pen: kind,
-          presets: _pens,
-          colors: _palette,
-          colorNames: _inkNames,
-          paperColor: note.document.paperColor,
-          onChange: _setPen,
-          onCustomColor: (pen, current) => unawaited(
-            _customColor(current, (value) => _setPen(pen, color: value)),
+  Widget _penStrip(InkNote note, {required bool compact}) => Row(
+    children: [
+      ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: compact ? 102 : 204),
+        child: Scrollbar(
+          controller: _penScroll,
+          child: SingleChildScrollView(
+            controller: _penScroll,
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var index = 0; index < _pens.length; index++)
+                  _penButton(note, index),
+              ],
+            ),
           ),
+        ),
+      ),
+      _shelfIcon(
+        IconButton(
+          tooltip: 'Thêm bút',
+          icon: const Icon(Icons.add_rounded, size: 19),
+          onPressed: _addPen,
+        ),
+      ),
+    ],
+  );
+
+  Widget _penButton(InkNote note, int index) {
+    final scheme = Theme.of(context).colorScheme;
+    final pen = _pens[index];
+    final selected = _tool == Tool.pen && _penIndex == index;
+    return ToolOptionsMenu(
+      key: ValueKey('pen-$index'),
+      label: 'Bút ${index + 1}',
+      selected: selected,
+      onOpen: () => _choosePen(index),
+      trigger: SizedBox(
+        width: 34,
+        height: 36,
+        child: Center(
+          child: Container(
+            width: 28,
+            height: 28,
+            padding: const EdgeInsets.all(3),
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: selected ? scheme.primary : Colors.transparent,
+              ),
+            ),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: pen.color,
+                shape: BoxShape.circle,
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+            ),
+          ),
+        ),
+      ),
+      panel: PenOptionsPanel(
+        preset: pen,
+        colors: _palette,
+        colorNames: _inkNames,
+        paperColor: note.document.paperColor,
+        onChange: (kind, {color, width, dashed}) => _updatePen(
+          index,
+          kind: kind,
+          color: color,
+          width: width,
+          dashed: dashed,
+        ),
+        onCustomColor: (_, current) => unawaited(
+          _customColor(current, (value) => _updatePen(index, color: value)),
         ),
       ),
     );
@@ -1254,12 +1415,11 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   }
 
   void _updateShapeStyle({Color? color, double? width, bool? dashed}) {
-    final (oldColor, oldWidth, oldDash) = _shapeStyle;
     setState(
-      () => _shapeStyle = (
-        color ?? oldColor,
-        width ?? oldWidth,
-        dashed ?? oldDash,
+      () => _shapeStyle = PenPreset(
+        color: color ?? _shapeStyle.color,
+        width: width ?? _shapeStyle.width,
+        dashed: dashed ?? _shapeStyle.dashed,
       ),
     );
   }
@@ -1273,14 +1433,6 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
             'Dịch giấy · Space + kéo',
             _tool == Tool.hand,
             () => _setTool(Tool.hand),
-          ),
-        ),
-        _shelfIcon(
-          _toolButton(
-            Icons.lens_blur,
-            'Laser',
-            _tool == Tool.laser,
-            () => _setTool(Tool.laser),
           ),
         ),
       ],
@@ -1308,8 +1460,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           icon: Icons.tune_rounded,
           compact: false,
           panel: PenOptionsPanel(
-            pen: PenKind.ballpoint,
-            presets: {PenKind.ballpoint: _shapeStyle},
+            preset: _shapeStyle,
             colors: _palette,
             colorNames: _inkNames,
             paperColor: note.document.paperColor,
@@ -1372,8 +1523,6 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           switch (value) {
             case 'hand':
               _setTool(Tool.hand);
-            case 'laser':
-              _setTool(Tool.laser);
             case 'color':
               unawaited(
                 _customColor(note.document.paperColor, (color) {
@@ -1392,7 +1541,6 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
         itemBuilder: (_) => [
           if (!showLabels) ...[
             const PopupMenuItem(value: 'hand', child: Text('Dịch giấy')),
-            const PopupMenuItem(value: 'laser', child: Text('Laser')),
             const PopupMenuDivider(),
           ],
           for (final kind in PaperKind.values)
@@ -1407,7 +1555,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           showLabels ? Icons.grid_on_outlined : Icons.more_horiz_rounded,
           'Nền',
           showLabel: showLabels,
-          selected: !showLabels && (_tool == Tool.hand || _tool == Tool.laser),
+          selected: !showLabels && _tool == Tool.hand,
         ),
       ),
       _shelfDivider(),
@@ -1563,6 +1711,28 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
               () => _changeMode(_DeskMode.windowed),
             ),
           ] else ...[
+            if (_store != null)
+              _shelfIcon(
+                PopupMenuButton<String>(
+                  tooltip: 'Sao lưu và nhập ghi chú',
+                  enabled: !_busy,
+                  icon: const Icon(Icons.folder_open_outlined, size: 18),
+                  onSelected: (action) => unawaited(
+                    _backup(note: action == 'export' ? note : null),
+                  ),
+                  itemBuilder: (_) => [
+                    PopupMenuItem(
+                      value: 'export',
+                      enabled: note != null,
+                      child: const Text('Sao lưu ghi chú (.inkstudy)'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'import',
+                      child: Text('Nhập ghi chú (.inkstudy)'),
+                    ),
+                  ],
+                ),
+              ),
             if (note != null) ...[
               action(
                 Icons.remove_rounded,
@@ -1625,9 +1795,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       _view(zoom.clamp(0.25, 4.0).toDouble(), note.scroll);
 
   Widget _paper(InkNote note) {
-    final (color, width, dashed) = _tool == Tool.shape
-        ? _shapeStyle
-        : _pens[_pen]!;
+    final style = _tool == Tool.shape ? _shapeStyle : _pens[_penIndex];
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1638,11 +1806,11 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           store: _store!,
           onChange: _document,
           tool: _tool,
-          color: color,
-          width: width,
+          color: style.color,
+          width: style.width,
           eraserWidth: _eraserSize,
-          penKind: _pen,
-          dashed: dashed,
+          penKind: style.kind,
+          dashed: style.dashed,
           shapeKind: _shape,
           zoom: note.zoom,
           scroll: note.scroll,

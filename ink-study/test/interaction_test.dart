@@ -231,7 +231,7 @@ void main() {
       expect(document.shapes.single.end, shape.end + delta);
       final moved = document;
 
-      expect(canvas.currentState!.deleteSelection(), isTrue);
+      await tester.tap(find.text('Xóa'));
       await tester.pump();
       expect(edits, 2);
       expect(document.strokes.single, same(outside));
@@ -258,7 +258,14 @@ void main() {
       await tester.pump();
       expect(quickSelections, 1);
       expect(edits, 2);
-      expect(canvas.currentState!.deleteSelection(), isTrue);
+      await tester.tap(find.text('Di chuyển'));
+      await tester.pump();
+      expect(find.text('Bấm vị trí mới'), findsOneWidget);
+      await tester.tapAt(screen(const Offset(650, 450)));
+      await tester.pump();
+      expect(edits, 3);
+      expect(document.shapes.single.start.dx, greaterThan(550));
+      await tester.tap(find.text('Xóa'));
       await tester.pump();
       expect(document.strokes.single, same(outside));
       expect(document.shapes, isEmpty);

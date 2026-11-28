@@ -71,7 +71,10 @@ void main() {
       expect(find.text('Xuất PDF'), findsNothing);
       expect(canvas().penKind, PenKind.ballpoint);
 
-      await tester.tap(find.byTooltip('Chỉnh bút'));
+      expect(find.byTooltip('Bút 3'), findsOneWidget);
+      expect(find.byTooltip('Bút 4'), findsNothing);
+      expect(find.text('Bút mực'), findsNothing);
+      await tester.tap(find.byTooltip('Bút 1'));
       await tester.pumpAndSettle();
       expect(find.text('Màu tùy chỉnh'), findsOneWidget);
       await tester.tap(find.byTooltip('Đỏ'));
@@ -84,18 +87,15 @@ void main() {
       await tester.pumpAndSettle();
       expect(canvas().width, greaterThan(2.8));
 
-      await tester.tap(
-        find.descendant(
-          of: find.byType(PenOptionsPanel),
-          matching: find.text('Bút mực'),
-        ),
-      );
+      await tester.tap(find.byTooltip('Bút 1'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Bút 2'));
       await tester.pumpAndSettle();
       expect(canvas().penKind, PenKind.fountain);
       expect(canvas().width, 6.0);
       await tester.tap(find.text('Bút chì'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Chỉnh bút'));
+      await tester.tap(find.byTooltip('Bút 2'));
       await tester.pumpAndSettle();
       expect(canvas().penKind, PenKind.pencil);
       expect(find.text('Màu tùy chỉnh'), findsNothing);
@@ -108,7 +108,7 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Thư viện'), findsNothing);
       expect(find.text('Chọn vùng'), findsOneWidget);
-      expect(find.text('Bút chì'), findsOneWidget);
+      expect(find.byTooltip('Bút 2'), findsOneWidget);
       expect(canvas().tool, Tool.select);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
@@ -125,11 +125,12 @@ void main() {
         findsOneWidget,
       );
       expect(find.byTooltip('Ẩn thư viện'), findsOneWidget);
-      await tester.tap(find.byTooltip('Chỉnh bút'));
+      await tester.tap(find.byTooltip('Laser'));
       await tester.pumpAndSettle();
-      await tester.tap(find.text('Bút bi'));
+      expect(canvas().tool, Tool.laser);
+      await tester.tap(find.byTooltip('Bút 1'));
       await tester.pumpAndSettle();
-      await tester.tap(find.byTooltip('Chỉnh bút'));
+      await tester.tap(find.byTooltip('Bút 1'));
       await tester.pumpAndSettle();
       expect(canvas().tool, Tool.pen);
       expect(canvas().penKind, PenKind.ballpoint);
@@ -179,6 +180,31 @@ void main() {
       expect(canvas().tool, Tool.shape);
       expect(find.byTooltip('Đóng cửa sổ'), findsOneWidget);
       expect(find.byTooltip('Xuất PDF'), findsOneWidget);
+
+      await tester.tap(find.byTooltip('Thêm bút'));
+      await tester.pumpAndSettle();
+      expect(find.byTooltip('Bút 4').hitTestable(), findsOneWidget);
+      expect(canvas().tool, Tool.pen);
+      await tester.tap(find.byTooltip('Bút 4'));
+      await tester.pumpAndSettle();
+      expect(find.byType(PenOptionsPanel), findsOneWidget);
+      await tester.tap(find.byTooltip('Bút 4'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Tùy chọn ghi chú'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Nhân bản ghi chú'));
+      await tester.pumpAndSettle();
+      expect(
+        find.widgetWithText(ListTile, 'Bài ghi chú kiểm thử'),
+        findsOneWidget,
+      );
+      expect(
+        find.widgetWithText(ListTile, 'Bài ghi chú kiểm thử (bản sao)'),
+        findsOneWidget,
+      );
+      await tester.tap(find.byTooltip('Sao lưu và nhập ghi chú'));
+      await tester.pumpAndSettle();
+      expect(find.text('Nhập ghi chú (.inkstudy)'), findsOneWidget);
 
       await tester.pumpWidget(const SizedBox());
     },

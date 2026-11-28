@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'canvas.dart';
 import 'model.dart';
 
-typedef PenSettings = (Color, double, bool);
 typedef PenSettingsChanged =
     void Function(PenKind kind, {Color? color, double? width, bool? dashed});
 
@@ -139,12 +138,18 @@ class ToolOptionsMenu extends StatelessWidget {
     required this.panel,
     this.icon = Icons.keyboard_arrow_down_rounded,
     this.compact = true,
+    this.trigger,
+    this.selected = false,
+    this.onOpen,
   });
 
   final String label;
   final Widget panel;
   final IconData icon;
   final bool compact;
+  final Widget? trigger;
+  final bool selected;
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -164,13 +169,15 @@ class ToolOptionsMenu extends StatelessWidget {
           ),
         ),
       ),
-      alignmentOffset: Offset(compact ? -31 : 0, 5),
+      alignmentOffset: Offset(trigger == null && compact ? -31 : 0, 5),
+      onOpen: onOpen,
       menuChildren: [panel],
       builder: (context, controller, _) => Tooltip(
         message: label,
         child: Semantics(
           button: true,
           expanded: controller.isOpen,
+          selected: selected,
           child: InkWell(
             onTap: () {
               if (controller.isOpen) {
@@ -179,11 +186,13 @@ class ToolOptionsMenu extends StatelessWidget {
                 controller.open();
               }
             },
-            child: SizedBox(
-              width: compact ? 20 : 35,
-              height: 36,
-              child: Icon(icon, size: compact ? 15 : 18),
-            ),
+            child:
+                trigger ??
+                SizedBox(
+                  width: compact ? 20 : 35,
+                  height: 36,
+                  child: Icon(icon, size: compact ? 15 : 18),
+                ),
           ),
         ),
       ),
@@ -191,11 +200,10 @@ class ToolOptionsMenu extends StatelessWidget {
   }
 }
 
-class PenOptionsPanel extends StatefulWidget {
+class PenOptionsPanel extends StatelessWidget {
   const PenOptionsPanel({
     super.key,
-    required this.pen,
-    required this.presets,
+    required this.preset,
     required this.colors,
     required this.colorNames,
     required this.paperColor,
@@ -204,8 +212,7 @@ class PenOptionsPanel extends StatefulWidget {
     this.forShape = false,
   });
 
-  final PenKind pen;
-  final Map<PenKind, PenSettings> presets;
+  final PenPreset preset;
   final List<Color> colors;
   final List<String> colorNames;
   final Color paperColor;
@@ -213,23 +220,17 @@ class PenOptionsPanel extends StatefulWidget {
   final void Function(PenKind kind, Color color) onCustomColor;
   final bool forShape;
 
-  @override
-  State<PenOptionsPanel> createState() => _PenOptionsPanelState();
-}
-
-class _PenOptionsPanelState extends State<PenOptionsPanel> {
-  late PenKind _pen = widget.pen;
-
   void _change({PenKind? pen, Color? color, double? width, bool? dashed}) {
-    setState(() => _pen = pen ?? _pen);
-    widget.onChange(_pen, color: color, width: width, dashed: dashed);
+    onChange(pen ?? preset.kind, color: color, width: width, dashed: dashed);
   }
 
   @override
   Widget build(BuildContext context) {
-    final (color, width, dashed) = widget.presets[_pen]!;
+    final color = preset.color;
+    final width = preset.width;
+    final dashed = preset.dashed;
     final scheme = Theme.of(context).colorScheme;
-    final kind = widget.forShape ? PenKind.ballpoint : _pen;
+    final kind = preset.kind;
     return SizedBox(
       width: 288,
       child: Padding(
@@ -239,12 +240,12 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              widget.forShape ? 'Kiểu nét hình' : 'Tùy chỉnh bút',
+              forShape ? 'Kiểu nét hình' : 'Tùy chỉnh bút',
               style: Theme.of(
                 context,
               ).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700),
             ),
-            if (!widget.forShape) ...[
+            if (!forShape) ...[
               const SizedBox(height: 7),
               Wrap(
                 spacing: 5,
@@ -255,18 +256,18 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
                       width: 127,
                       height: 37,
                       child: Semantics(
-                        selected: _pen == pen,
+                        selected: kind == pen,
                         child: TextButton.icon(
                           onPressed: () => _change(pen: pen),
                           icon: ToolNibPreview(
                             pen: pen,
-                            color: widget.presets[pen]!.$1,
+                            color: color,
                             outline: scheme.onSurface,
                           ),
                           label: Text(penLabel(pen)),
                           style: TextButton.styleFrom(
                             foregroundColor: scheme.onSurface,
-                            backgroundColor: _pen == pen
+                            backgroundColor: kind == pen
                                 ? scheme.primaryContainer
                                 : scheme.surfaceContainerLow,
                             padding: const EdgeInsets.symmetric(horizontal: 6),
@@ -284,7 +285,7 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
             const SizedBox(height: 7),
             DecoratedBox(
               decoration: BoxDecoration(
-                color: widget.paperColor,
+                color: paperColor,
                 borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: scheme.outlineVariant),
               ),
@@ -302,25 +303,25 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
             Wrap(
               spacing: 5,
               children: [
-                for (var index = 0; index < widget.colors.length; index++)
+                for (var index = 0; index < colors.length; index++)
                   InkColorSwatch(
-                    color: widget.colors[index],
-                    label: widget.colorNames[index],
-                    selected: color == widget.colors[index],
-                    onTap: () => _change(color: widget.colors[index]),
+                    color: colors[index],
+                    label: colorNames[index],
+                    selected: color == colors[index],
+                    onTap: () => _change(color: colors[index]),
                   ),
               ],
             ),
             TextButton.icon(
               icon: const Icon(Icons.colorize_outlined, size: 16),
-              onPressed: () => widget.onCustomColor(_pen, color),
+              onPressed: () => onCustomColor(kind, color),
               label: const Text('Màu tùy chỉnh'),
             ),
             ToolWidthSlider(
               label: 'Độ dày',
               value: width,
-              min: kind == PenKind.highlighter ? 4 : 0.8,
-              max: kind == PenKind.highlighter || widget.forShape ? 34 : 14,
+              min: PenPreset.minimumWidth(kind),
+              max: forShape ? 34 : PenPreset.maximumWidth(kind),
               onChanged: (value) => _change(width: value),
             ),
             Wrap(

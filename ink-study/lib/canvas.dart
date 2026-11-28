@@ -333,6 +333,7 @@ class InkCanvasState extends State<InkCanvas>
   bool _selectingRectangle = false;
   bool _quickSelect = false;
   bool _movingGroup = false;
+  bool _placingSelection = false;
   Rect? _selectionRectangle;
   Offset _groupMove = Offset.zero;
   _Handle? _handle;
@@ -537,6 +538,10 @@ class InkCanvasState extends State<InkCanvas>
   void _pointerDown(PointerDownEvent event) {
     final point = _toDocument(event.localPosition);
     if (event.kind == PointerDeviceKind.touch) {
+      if (_placingSelection && _isOnPaper(point)) {
+        _placeSelection(point);
+        return;
+      }
       _touches[event.pointer] = event.localPosition;
       _pinch();
       return;
@@ -579,6 +584,10 @@ class InkCanvasState extends State<InkCanvas>
         : _quickSelect
         ? Tool.select
         : widget.tool;
+    if (_placingSelection && tool == Tool.select && !_quickSelect) {
+      _placeSelection(point);
+      return;
+    }
     _pointer = event.pointer;
     _gestureTool = tool;
     _gestureOrigin = point;
@@ -774,6 +783,7 @@ class InkCanvasState extends State<InkCanvas>
     _quickSelect = false;
     _selectionRectangle = null;
     _movingGroup = false;
+    _placingSelection = false;
     _groupMove = Offset.zero;
   }
 
@@ -910,6 +920,7 @@ class InkCanvasState extends State<InkCanvas>
   void _startRectangleSelection() {
     _selection = null;
     _groupSelection = null;
+    _placingSelection = false;
     _selectingRectangle = true;
   }
 
@@ -935,14 +946,7 @@ class InkCanvasState extends State<InkCanvas>
   void _moveGroup(Offset delta) {
     final group = _groupSelection;
     if (group == null) return;
-    final bounds = group.bounds;
-    final left = math.min(0.0, bounds.left);
-    final top = math.min(0.0, bounds.top);
-    final right = math.max(_paperWidth, bounds.right);
-    _groupMove = Offset(
-      delta.dx.clamp(left - bounds.left, right - bounds.right).toDouble(),
-      math.max(delta.dy, top - bounds.top),
-    );
+    _groupMove = _boundedMove(group.bounds, delta);
     if (_groupMove == Offset.zero) {
       _working = null;
       return;
@@ -978,6 +982,40 @@ class InkCanvasState extends State<InkCanvas>
         (region) => region.copyWith(bounds: region.bounds.shift(_groupMove)),
       ),
     );
+  }
+
+  Offset _boundedMove(Rect bounds, Offset delta) {
+    final left = math.min(0.0, bounds.left);
+    final top = math.min(0.0, bounds.top);
+    final right = math.max(_paperWidth, bounds.right);
+    return Offset(
+      delta.dx.clamp(left - bounds.left, right - bounds.right).toDouble(),
+      math.max(delta.dy, top - bounds.top),
+    );
+  }
+
+  Rect? get _selectedBounds =>
+      _groupSelection?.bounds ?? _selection?.bounds(widget.document);
+
+  void _placeSelection(Offset target) {
+    _placingSelection = false;
+    final bounds = _selectedBounds;
+    if (bounds != null) {
+      if (_groupSelection != null) {
+        _moveGroup(target - bounds.center);
+        _groupSelection = _groupSelection?.shift(_groupMove);
+        _groupMove = Offset.zero;
+      } else {
+        final center = bounds.center;
+        _handle = _Handle.move;
+        _moveSelection(center, center + _boundedMove(bounds, target - center));
+        _handle = null;
+      }
+      final next = _working;
+      _working = null;
+      if (next != null) _commit(next);
+    }
+    _refresh();
   }
 
   Rect _resize(Rect bounds, Offset delta, _Handle handle) {
@@ -1083,6 +1121,7 @@ class InkCanvasState extends State<InkCanvas>
   }
 
   bool deleteSelection() {
+    _placingSelection = false;
     final group = _groupSelection;
     final selection = _selection;
     final doc = widget.document;
@@ -1462,6 +1501,97 @@ class InkCanvasState extends State<InkCanvas>
     }
   }
 
+  Widget _selectionActions(Size size) {
+    final bounds = _selectedBounds;
+    if (widget.tool != Tool.select ||
+        bounds == null ||
+        _pointer != null ||
+        !bounds.inflate(8 / _zoom).overlaps(visibleBounds)) {
+      return const SizedBox.shrink();
+    }
+    const width = 188.0;
+    const height = 36.0;
+    final top = bounds.top * _zoom + _origin.dy;
+    final bottom = bounds.bottom * _zoom + _origin.dy;
+    final x = bounds.center.dx * _zoom + _origin.dx;
+    final scheme = Theme.of(context).colorScheme;
+    return Positioned(
+      left: (x - width / 2).clamp(4.0, math.max(4.0, size.width - width - 4)),
+      top: (top >= height + 12 ? top - height - 8 : bottom + 8).clamp(
+        4.0,
+        math.max(4.0, size.height - height - 4),
+      ),
+      width: width,
+      height: height,
+      child: Material(
+        elevation: 4,
+        color: scheme.surface,
+        borderRadius: BorderRadius.circular(9),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (_placingSelection) ...[
+              const Flexible(
+                child: Text(
+                  'Bấm vị trí mới',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              IconButton(
+                icon: const Icon(Icons.close, size: 16),
+                tooltip: 'Hủy di chuyển',
+                onPressed: () {
+                  _placingSelection = false;
+                  _refresh();
+                },
+              ),
+            ] else ...[
+              Expanded(
+                flex: 3,
+                child: _selectionButton(Icons.open_with, 'Di chuyển', () {
+                  _placingSelection = true;
+                  _refresh();
+                }),
+              ),
+              Expanded(
+                flex: 2,
+                child: _selectionButton(
+                  Icons.delete_outline_rounded,
+                  'Xóa',
+                  deleteSelection,
+                ),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _selectionButton(
+    IconData icon,
+    String label,
+    VoidCallback onPressed,
+  ) => TextButton(
+    onPressed: onPressed,
+    style: TextButton.styleFrom(
+      minimumSize: Size.zero,
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+    ),
+    child: Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Icon(icon, size: 16),
+        const SizedBox(width: 5),
+        Flexible(
+          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
+        ),
+      ],
+    ),
+  );
+
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(
@@ -1505,41 +1635,45 @@ class InkCanvasState extends State<InkCanvas>
             ),
           ),
         );
-        if (_pendingCrop == null) return paper;
         return Stack(
           fit: StackFit.expand,
           children: [
             paper,
-            Positioned(
-              bottom: 20,
-              left: 0,
-              right: 0,
-              child: Center(
-                child: Material(
-                  elevation: 5,
-                  color: Theme.of(context).colorScheme.surface,
-                  borderRadius: BorderRadius.circular(12),
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        const Text('Vùng PDF đã chọn'),
-                        const SizedBox(width: 12),
-                        TextButton(
-                          onPressed: () => cancelGesture(),
-                          child: const Text('Hủy'),
-                        ),
-                        FilledButton(
-                          onPressed: _acceptCrop,
-                          child: const Text('Tách vùng'),
-                        ),
-                      ],
+            ValueListenableBuilder<int>(
+              valueListenable: _revision,
+              builder: (_, _, _) => _selectionActions(_size),
+            ),
+            if (_pendingCrop != null)
+              Positioned(
+                bottom: 20,
+                left: 0,
+                right: 0,
+                child: Center(
+                  child: Material(
+                    elevation: 5,
+                    color: Theme.of(context).colorScheme.surface,
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 8, 8, 8),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Text('Vùng PDF đã chọn'),
+                          const SizedBox(width: 12),
+                          TextButton(
+                            onPressed: () => cancelGesture(),
+                            child: const Text('Hủy'),
+                          ),
+                          FilledButton(
+                            onPressed: _acceptCrop,
+                            child: const Text('Tách vùng'),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ),
               ),
-            ),
           ],
         );
       },

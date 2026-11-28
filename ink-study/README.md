@@ -5,9 +5,11 @@
 ## Sử dụng
 
 - Bấm **Ghi chú mới** hoặc dùng Ctrl+N. Kéo chuột trái hoặc dùng bút cảm ứng để viết. Lăn chuột để cuộn và giữ Ctrl khi lăn để thu phóng.
-- Bấm vào biểu tượng bút để viết ngay. Mở mũi tên bên cạnh để chọn **Bút mực**, bút bi, bút chì hoặc dạ quang và xem trước màu, độ dày, nét đứt. Bút mực cho nét thanh đậm theo hướng viết và lực tay của bút cảm ứng hỗ trợ lực nhấn.
+- Bấm một chấm màu để chọn bút và mở bảng chỉnh kiểu, màu, độ dày và nét. Ban đầu có ba bút. Bấm **+** cạnh bộ bút để thêm cấu hình. Có thể cuộn ngang bộ bút khi đã thêm nhiều bút.
 - Dùng **Gôm** để cắt một đoạn nét viết. Quét qua cạnh đã vẽ để xóa cả hình. Mũi tên bên cạnh mở bảng chỉnh cỡ gôm từ 6 đến 72 px và các cỡ **Nhỏ, Vừa, Lớn**.
-- Bấm **Chọn vùng** hoặc giữ **Shift**, rồi kéo chuột trái từ khoảng trống để khoanh qua các nét, hình, ảnh hoặc vùng PDF đã tách. Kéo bên trong khung để di chuyển cả nhóm. Phím Delete xóa nhóm, Ctrl+Z hoàn tác và Ctrl+Y làm lại.
+- Bấm **Chọn vùng** hoặc giữ **Shift**, rồi kéo chuột trái từ khoảng trống để khoanh qua các nét, hình, ảnh hoặc vùng PDF đã tách. Kéo trong khung, hoặc bấm **Di chuyển** rồi bấm vị trí mới. Bấm **Xóa** hoặc Delete để xóa nhóm, Ctrl+Z để hoàn tác.
+- Chọn **Laser** trên thanh công cụ để trỏ tạm trên giấy. Dấu laser tự mờ sau khi nhấc bút.
+- Dùng biểu tượng thư mục ở thanh dưới để **Sao lưu ghi chú (.inkstudy)** hoặc **Nhập ghi chú (.inkstudy)**. Tệp lưu nét viết, hình, ảnh và PDF đi kèm. Ghi chú nhập được thêm riêng vào thư viện. Trong menu **⋮** cạnh ghi chú, chọn **Nhân bản ghi chú** nếu muốn sửa một bản sao.
 - Dùng nút **−** và **□ / ❐** bên phải thanh công cụ để thu nhỏ, phóng to hoặc khôi phục cửa sổ. Nhấn **F11** để viết toàn màn hình và **F11** hoặc **Esc** để trở lại. Biểu tượng **Trình bày với laser** ở thanh dưới mở chế độ trình chiếu.
 - Dùng **Chèn → PDF làm nền**. Để chỉnh sơ đồ, chọn **Chèn → Chỉnh vùng PDF**, khoanh vùng trong một trang rồi chọn **Tách vùng**. Kéo cạnh khung để giãn theo một chiều.
 - Dán ảnh với Ctrl+V. Dùng **Chọn vùng** rồi bấm vào một ảnh hoặc hình để hiện tay nắm chỉnh kích thước. Bấm chuột phải để xem các lệnh như xoay ảnh hoặc đổi kiểu cạnh của hình.

@@ -5,6 +5,62 @@ enum PaperKind { blank, ruled, grid, dots }
 
 enum PenKind { ballpoint, fountain, pencil, highlighter }
 
+class PenPreset {
+  const PenPreset({
+    this.kind = PenKind.ballpoint,
+    required this.color,
+    this.width = 2.8,
+    this.dashed = false,
+  });
+
+  final PenKind kind;
+  final Color color;
+  final double width;
+  final bool dashed;
+
+  static double minimumWidth(PenKind kind) =>
+      kind == PenKind.highlighter ? 4 : 0.8;
+  static double maximumWidth(PenKind kind) =>
+      kind == PenKind.highlighter ? 34 : 14;
+
+  PenPreset copyWith({
+    PenKind? kind,
+    Color? color,
+    double? width,
+    bool? dashed,
+  }) {
+    final type = kind ?? this.kind;
+    return PenPreset(
+      kind: type,
+      color: color ?? this.color,
+      width: (width ?? this.width)
+          .clamp(minimumWidth(type), maximumWidth(type))
+          .toDouble(),
+      dashed: dashed ?? this.dashed,
+    );
+  }
+
+  Map<String, Object> toJson() => {
+    'kind': kind.name,
+    'color': color.toARGB32(),
+    'width': width,
+    'dashed': dashed,
+  };
+
+  factory PenPreset.fromJson(Map<String, dynamic> data) {
+    final kind = _enum(PenKind.values, data['kind'], PenKind.ballpoint);
+    return PenPreset(
+      kind: kind,
+      color: _color(data['color'], const Color(0xff253750)),
+      width: _number(
+        data['width'],
+        2.8,
+      ).clamp(minimumWidth(kind), maximumWidth(kind)).toDouble(),
+      dashed: data['dashed'] == true,
+    );
+  }
+}
+
 enum ShapeKind {
   line,
   arrow,
