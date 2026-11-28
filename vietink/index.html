@@ -2,16 +2,16 @@
 <html lang="vi">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#f6f9fa">
   <meta name="description" content="Ghi chú viết tay, vẽ hình và khoanh vùng trên trang giấy của Ink Study.">
   <title>Ink Study</title>
   <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/favicon.ico">
   <link rel="apple-touch-icon" href="./icons/app-icon.png">
-  <link rel="stylesheet" href="./editor.css?v=0.4.0">
-  <script defer src="./install.js?v=0.4.0"></script>
-  <script type="module" src="./app.js?v=0.4.0"></script>
+  <link rel="stylesheet" href="./editor.css?v=0.5.0">
+  <script defer src="./install.js?v=0.5.0"></script>
+  <script type="module" src="./app.js?v=0.5.0"></script>
 </head>
 <body>
   <nav class="ribbon" aria-label="Công cụ viết và vẽ">
@@ -21,29 +21,38 @@
         <button class="tool icon-only" id="redo" data-icon="redo" title="Làm lại (Ctrl+Y)" aria-label="Làm lại"></button>
       </div>
       <div class="tool-group writing">
-        <div class="split-tool">
-          <button class="tool" id="pen" data-mode="pen" data-icon="pen" title="Bút (B)"><span>Bút</span></button>
-          <button class="tool chevron" id="brush-options" data-icon="chevron" title="Chỉnh bút" aria-label="Chỉnh bút" aria-expanded="false" aria-controls="brush-panel"></button>
+        <div class="split-tool brush-tool">
+          <button class="tool major-tool" id="pen" data-mode="pen" data-icon="pen" title="Bút bi (B)" aria-label="Bút bi">
+            <span class="tool-label" id="pen-label">Bút bi</span>
+            <span class="mobile-label" aria-hidden="true">Bút</span>
+          </button>
+          <button class="tool settings-toggle" id="brush-options" data-icon="chevron" title="Chỉnh bút" aria-label="Chỉnh bút" aria-expanded="false" aria-controls="brush-panel"></button>
         </div>
-        <div class="quick-colors" id="quick-colors" aria-label="Màu mực"></div>
+        <div class="quick-colors" id="quick-colors" aria-label="Màu mực nhanh"></div>
       </div>
       <div class="tool-group editing">
-        <button class="tool" id="eraser" data-mode="eraser" data-icon="eraser" title="Gôm (E)" aria-label="Gôm"><span>Gôm</span></button>
-        <button class="tool" id="select" data-mode="select" data-icon="select" title="Chọn vùng (V) · Shift + kéo" aria-label="Chọn vùng"><span>Chọn vùng</span></button>
+        <div class="split-tool eraser-tool">
+          <button class="tool major-tool" id="eraser" data-mode="eraser" data-icon="eraser" title="Gôm (E)" aria-label="Gôm"><span>Gôm</span></button>
+          <button class="tool settings-toggle" id="eraser-options" data-icon="chevron" title="Chỉnh gôm" aria-label="Chỉnh gôm" aria-expanded="false" aria-controls="eraser-panel"></button>
+        </div>
+        <button class="tool major-tool" id="select" data-mode="select" data-icon="select" title="Chọn vùng (V) · Shift + kéo" aria-label="Chọn vùng">
+          <span class="tool-label">Chọn vùng</span><span class="mobile-label" aria-hidden="true">Chọn</span>
+        </button>
       </div>
       <div class="tool-group drawing">
-        <div class="split-tool">
-          <button class="tool" id="shape" data-mode="line" data-icon="shapes" title="Hình"><span>Hình</span></button>
-          <button class="tool chevron" id="shape-options" data-icon="chevron" title="Chọn hình" aria-label="Chọn kiểu hình" aria-expanded="false" aria-controls="shape-panel"></button>
-        </div>
-        <button class="tool icon-only" id="laser" data-mode="laser" data-icon="laser" title="Laser" aria-label="Laser"></button>
-        <button class="tool icon-only" id="pan" data-mode="pan" data-icon="hand" title="Di chuyển giấy (Space + kéo)" aria-label="Di chuyển giấy"></button>
+        <button class="tool major-tool" id="shape-options" data-icon="shapes" title="Chọn kiểu hình" aria-label="Chọn kiểu hình" aria-expanded="false" aria-controls="shape-panel">
+          <span>Hình</span>
+        </button>
+        <button class="tool major-tool" id="more-options" data-icon="more" title="Công cụ khác" aria-label="Công cụ khác" aria-expanded="false" aria-controls="more-panel">
+          <span>Thêm</span>
+        </button>
       </div>
     </div>
   </nav>
 
   <main id="stage" aria-label="Trang viết">
     <canvas id="paper-canvas" aria-label="Giấy ghi chú"></canvas>
+    <div id="eraser-cursor" class="eraser-cursor" aria-hidden="true" hidden></div>
     <div class="selection-strip" id="selection-strip" hidden>
       <span id="selection-count"></span>
       <button class="tool icon-only" id="delete-selection" data-icon="trash" title="Xóa vùng đã chọn (Delete)" aria-label="Xóa vùng đã chọn"></button>
@@ -88,8 +97,9 @@
       <h2>Chỉnh bút</h2>
       <button class="tool icon-only" type="button" data-close-panel data-icon="close" aria-label="Đóng bảng chỉnh bút"></button>
     </header>
-    <div class="nib-types" id="nib-types" aria-label="Kiểu bút">
+    <div class="nib-types" aria-label="Kiểu bút">
       <button class="tool nib-type" data-nib="pen" data-icon="pen"><span>Bút bi</span></button>
+      <button class="tool nib-type" data-nib="fountain" data-icon="fountain"><span>Bút mực</span></button>
       <button class="tool nib-type" data-nib="pencil" data-icon="pencil"><span>Bút chì</span></button>
       <button class="tool nib-type" data-nib="marker" data-icon="marker"><span>Dạ quang</span></button>
     </div>
@@ -98,18 +108,36 @@
       <div class="swatches" id="swatches"></div>
     </div>
     <div class="panel-field">
-      <label class="field-label" for="stroke-width">Độ dày <output id="stroke-size" for="stroke-width">3 px</output></label>
+      <label class="field-label" for="stroke-width">Độ dày <output id="stroke-size" for="stroke-width"></output></label>
       <div class="stroke-preview" aria-label="Xem trước nét bút">
-        <svg viewBox="0 0 264 46" fill="none" aria-hidden="true">
-          <path id="preview-stroke" d="M10 28 C32 28 50 9 82 11 S129 37 160 34 S214 13 254 16" stroke-linecap="round"/>
-        </svg>
+        <canvas id="preview-stroke" width="600" height="132" aria-hidden="true"></canvas>
       </div>
       <input id="stroke-width" type="range" min="1" max="20" step="0.5">
     </div>
     <label class="dash"><input id="dashed" type="checkbox"> Nét đứt</label>
   </section>
 
-  <section class="panel shape-panel" id="shape-panel" aria-label="Chọn kiểu hình" hidden>
+  <section class="panel" id="eraser-panel" aria-label="Chỉnh gôm" hidden>
+    <header class="panel-heading">
+      <h2>Chỉnh gôm</h2>
+      <button class="tool icon-only" type="button" data-close-panel data-icon="close" aria-label="Đóng bảng chỉnh gôm"></button>
+    </header>
+    <div class="eraser-preview" aria-label="Xem trước vùng tẩy">
+      <div class="eraser-preview-ink" aria-hidden="true"></div>
+      <div class="eraser-preview-disk" aria-hidden="true"></div>
+    </div>
+    <div class="panel-field">
+      <label class="field-label" for="eraser-width">Độ rộng gôm <output id="eraser-size" for="eraser-width"></output></label>
+      <input id="eraser-width" type="range" step="1">
+    </div>
+    <div class="eraser-presets" aria-label="Cỡ gôm nhanh">
+      <button class="tool" data-eraser-size="12" title="12 px"><span class="size-dot small" aria-hidden="true"></span>Nhỏ</button>
+      <button class="tool" data-eraser-size="24" title="24 px"><span class="size-dot medium" aria-hidden="true"></span>Vừa</button>
+      <button class="tool" data-eraser-size="48" title="48 px"><span class="size-dot large" aria-hidden="true"></span>Lớn</button>
+    </div>
+  </section>
+
+  <section class="panel list-panel" id="shape-panel" aria-label="Chọn kiểu hình" hidden>
     <header class="panel-heading">
       <h2>Hình</h2>
       <button class="tool icon-only" type="button" data-close-panel data-icon="close" aria-label="Đóng bảng chọn hình"></button>
@@ -117,6 +145,16 @@
     <button class="tool shape-type" data-shape="line" data-icon="line">Đường thẳng</button>
     <button class="tool shape-type" data-shape="rect" data-icon="rect">Hình chữ nhật</button>
     <button class="tool shape-type" data-shape="ellipse" data-icon="ellipse">Hình elip</button>
+  </section>
+
+  <section class="panel list-panel" id="more-panel" aria-label="Công cụ khác" hidden>
+    <header class="panel-heading">
+      <h2>Công cụ khác</h2>
+      <button class="tool icon-only" type="button" data-close-panel data-icon="close" aria-label="Đóng bảng công cụ"></button>
+    </header>
+    <button class="tool panel-action" id="pan" data-mode="pan" data-icon="hand">Di chuyển giấy</button>
+    <button class="tool panel-action" id="laser" data-mode="laser" data-icon="laser">Bút laser</button>
+    <button class="tool panel-action" id="more-redo" data-icon="redo">Làm lại</button>
   </section>
 </body>
 </html>

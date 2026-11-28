@@ -1,15 +1,15 @@
 'use strict';
 
 const cachePrefix = 'ink-study-web-shell-';
-const cacheName = cachePrefix + '0.4.0';
+const cacheName = cachePrefix + '0.5.0';
 const home = new URL('./', self.registration.scope);
 const indexPage = new URL('index.html', home);
 const assets = new Set([
   './index.html',
-  './editor.css?v=0.4.0',
-  './app.js?v=0.4.0',
-  './editor.js?v=0.4.0',
-  './install.js?v=0.4.0',
+  './editor.css?v=0.5.0',
+  './app.js?v=0.5.0',
+  './editor.js?v=0.5.0',
+  './install.js?v=0.5.0',
   './manifest.webmanifest',
   './icons/favicon.ico',
   './icons/app-icon.png',

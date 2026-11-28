@@ -2,9 +2,10 @@ const storageKey = 'vietink-trial-2026-v1';
 const paperWidth = 900;
 const paperKinds = new Set(['lines', 'grid', 'dots', 'blank']);
 const shapeKinds = new Set(['line', 'rect', 'ellipse']);
-const brushKinds = new Set(['pen', 'pencil', 'marker']);
+const brushKinds = new Set(['pen', 'fountain', 'pencil', 'marker']);
 const tools = new Set([...brushKinds, ...shapeKinds, 'eraser', 'select', 'laser', 'pan']);
 const pointEpsilon = 1e-8;
+export const eraserSizes = Object.freeze({ min: 6, max: 72, initial: 24 });
 
 const clamp = (value, minimum, maximum) => Math.min(maximum, Math.max(minimum, value));
 const add = (a, b) => ({ x: a.x + b.x, y: a.y + b.y });
@@ -50,6 +51,18 @@ function ruleWidth(mark) {
   return mark.w * (mark.type === 'marker' ? 3 : mark.type === 'pencil' ? 0.85 : 1);
 }
 
+function dashPattern(mark) {
+  return [Math.max(4, mark.w * 3), Math.max(3, mark.w * 2)];
+}
+
+function inkLerp(a, b, t) {
+  const point = lerp(a, b, t);
+  if (a.weight !== undefined && b.weight !== undefined) {
+    point.weight = a.weight + (b.weight - a.weight) * t;
+  }
+  return point;
+}
+
 function pointsForShape(mark) {
   const start = mark.pts[0];
   const end = mark.pts.at(-1);
@@ -69,18 +82,18 @@ function pointsForShape(mark) {
 
 // Quadratic reconstruction softens pointer-message corners. Saving its sampled
 // outline lets the eraser split a curve without rebuilding or warping the ends.
-function traceSmooth(points, curve, line) {
+function traceSmooth(points, curve, line, interpolate = lerp) {
   let last = points[0];
   for (let index = 1; index < points.length - 1; index++) {
     const control = points[index];
-    const end = lerp(control, points[index + 1], 0.5);
+    const end = interpolate(control, points[index + 1], 0.5);
     curve(last, control, end);
     last = end;
   }
   line(last, points.at(-1));
 }
 
-function smoothPoints(points) {
+function smoothPoints(points, interpolate = lerp) {
   if (points.length < 3) return points.slice();
   const result = [points[0]];
   traceSmooth(
@@ -90,12 +103,135 @@ function smoothPoints(points) {
       const steps = clamp(Math.ceil(Math.sqrt(deviation / 0.35)), 1, 20);
       for (let step = 1; step <= steps; step++) {
         const t = step / steps;
-        result.push(lerp(lerp(start, control, t), lerp(control, end, t), t));
+        result.push(interpolate(
+          interpolate(start, control, t),
+          interpolate(control, end, t),
+          t,
+        ));
       }
     },
     (_, end) => result.push(end),
+    interpolate,
   );
   return result;
+}
+
+// A slanted nib makes a wider mark across its edge than along it. Stylus
+// pressure adds variation, and recording the width keeps erased pieces stable.
+function fountainPoints(samples) {
+  const weighted = samples.map((sample, index) => {
+    const before = samples[Math.max(0, index - 1)];
+    const after = samples[Math.min(samples.length - 1, index + 1)];
+    const direction = subtract(after, before);
+    const span = length(direction);
+    const across = span > pointEpsilon
+      ? Math.min(1, Math.abs(0.5 * direction.x + 0.866 * direction.y) / span)
+      : 0.7;
+    const pressure = sample.pressure ?? 0.72;
+    return {
+      x: sample.x,
+      y: sample.y,
+      weight: (0.25 + 0.75 * across) * (0.45 + 0.55 * pressure),
+    };
+  });
+  return smoothPoints(weighted, inkLerp);
+}
+
+function addInkDisk(path, point, radius) {
+  path.moveTo(point.x + radius, point.y);
+  path.arc(point.x, point.y, radius, 0, 2 * Math.PI);
+  path.closePath();
+}
+
+function fountainPath(points, mark) {
+  const path = new Path2D();
+  const radius = (point) => mark.w * (point.weight ?? 0.7) / 2;
+  if (points.length === 1) {
+    addInkDisk(path, points[0], radius(points[0]));
+    return path;
+  }
+  const [dash, gap] = dashPattern(mark);
+  const cycle = dash + gap;
+  const position = mark.phase || 0;
+  let phase = ((position % cycle) + cycle) % cycle;
+
+  for (let index = 1; index < points.length; index++) {
+    const a = points[index - 1];
+    const b = points[index];
+    const delta = subtract(b, a);
+    const span = length(delta);
+    if (span < pointEpsilon) continue;
+    const normal = { x: -delta.y / span, y: delta.x / span };
+    let start = 0;
+    while (start < span - pointEpsilon) {
+      const painted = !mark.dashed || phase < dash - pointEpsilon;
+      const remaining = painted ? dash - phase : cycle - phase;
+      const end = mark.dashed ? Math.min(span, start + remaining) : span;
+      if (painted) {
+        const first = inkLerp(a, b, start / span);
+        const last = inkLerp(a, b, end / span);
+        const firstRadius = radius(first);
+        const lastRadius = radius(last);
+        path.moveTo(first.x + normal.x * firstRadius, first.y + normal.y * firstRadius);
+        path.lineTo(first.x - normal.x * firstRadius, first.y - normal.y * firstRadius);
+        path.lineTo(last.x - normal.x * lastRadius, last.y - normal.y * lastRadius);
+        path.lineTo(last.x + normal.x * lastRadius, last.y + normal.y * lastRadius);
+        path.closePath();
+        addInkDisk(path, first, firstRadius);
+        addInkDisk(path, last, lastRadius);
+      }
+      phase += end - start;
+      if (phase >= cycle - pointEpsilon) phase = 0;
+      start = end;
+    }
+  }
+  return path;
+}
+
+function fountainPressure(event, fallback = 0.72) {
+  return event.pointerType === 'pen' && event.pressure > 0
+    ? clamp(event.pressure, 0, 1)
+    : fallback;
+}
+
+function brushAlpha(type) {
+  if (type === 'marker') return 0.28;
+  if (type === 'pencil') return 0.82;
+  return 1;
+}
+
+export function paintBrushPreview(canvas, mark) {
+  const context = canvas.getContext('2d');
+  context.setTransform(2, 0, 0, 2, 0, 0);
+  const width = canvas.width / 2;
+  const height = canvas.height / 2;
+  context.clearRect(0, 0, width, height);
+  const lineWidth = ruleWidth(mark);
+  const inset = Math.max(22, lineWidth / 2 + 5);
+  const amplitude = clamp((height - lineWidth) / 2 - 2, 0, 10);
+  const points = Array.from({ length: 49 }, (_, index) => {
+    const t = index / 48;
+    return {
+      x: inset + t * (width - 2 * inset),
+      y: height / 2 - amplitude * Math.sin(t * 3 * Math.PI),
+    };
+  });
+  context.globalAlpha = brushAlpha(mark.type);
+  if (mark.type === 'fountain') {
+    context.fillStyle = mark.color;
+    context.fill(fountainPath(fountainPoints(points), mark));
+  } else {
+    context.beginPath();
+    context.lineWidth = lineWidth;
+    context.lineCap = 'round';
+    context.lineJoin = 'round';
+    context.strokeStyle = mark.color;
+    context.setLineDash(mark.dashed ? dashPattern(mark) : []);
+    context.moveTo(points[0].x, points[0].y);
+    for (const point of points.slice(1)) context.lineTo(point.x, point.y);
+    context.stroke();
+  }
+  context.globalAlpha = 1;
 }
 
 function loadNote() {
@@ -108,11 +244,18 @@ function loadNote() {
       if (!Array.isArray(mark.pts)) return [];
       const points = mark.pts.filter(p => Number.isFinite(p?.x) && Number.isFinite(p?.y));
       if (points.length === 0) return [];
+      const fountain = mark.type === 'fountain' ||
+        (mark.type === 'pen' && (mark.nib === 'fountain' || points.some(point => Number.isFinite(point.weight))));
+      const storedPoints = fountain
+        ? points.map(({ x, y, weight }) => ({
+          x, y, weight: Number.isFinite(weight) ? clamp(weight, 0.1, 1) : 0.7,
+        }))
+        : shapeKinds.has(mark.type) || mark.smooth ? points : smoothPoints(points);
       return [{
-        type: mark.type,
+        type: fountain ? 'fountain' : mark.type,
         color: typeof mark.color === 'string' ? mark.color : '#26364c',
         w: Number.isFinite(mark.w) ? clamp(mark.w, 0.2, 60) : 3,
-        pts: shapeKinds.has(mark.type) || mark.smooth ? points : smoothPoints(points),
+        pts: storedPoints,
         smooth: true,
         dashed: Boolean(mark.dashed),
         phase: Number.isFinite(mark.phase) ? mark.phase : 0,
@@ -210,6 +353,7 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
   let placeInitialCamera = !stored?.camera;
   let tool = 'pen';
   let brush = { color: '#26364c', width: 3, dashed: false };
+  let eraserSize = eraserSizes.initial;
   let selection = new Set();
   let undoStack = [];
   let redoStack = [];
@@ -244,7 +388,12 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
     if (!pendingSave) return;
     pendingSave = false;
     try {
-      localStorage.setItem(storageKey, JSON.stringify({ doc: note, cam: camera }));
+      // An older offline client can still display a fountain mark as regular
+      // ink. Its points retain the widths when opened again in this version.
+      const marks = note.marks.map((mark) => mark.type === 'fountain'
+        ? { ...mark, type: 'pen', nib: 'fountain' }
+        : mark);
+      localStorage.setItem(storageKey, JSON.stringify({ doc: { ...note, marks }, cam: camera }));
       saved = true;
       saveError = false;
     } catch {
@@ -346,7 +495,8 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
   }
 
   function fittedCamera() {
-    const zoom = clamp((width - 56) / paperWidth, 0.22, 1);
+    const margin = width < 600 ? 16 : 56;
+    const zoom = clamp((width - margin) / paperWidth, 0.22, 1);
     return { x: (width - paperWidth * zoom) / 2, y: 24, z: zoom };
   }
 
@@ -361,16 +511,17 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
     if (result) return result;
     const points = shapeKinds.has(mark.type) ? pointsForShape(mark) : mark.pts;
     const bounds = rectangle(points[0], points[0]);
-    const path = new Path2D();
-    path.moveTo(points[0].x, points[0].y);
+    const fountain = mark.type === 'fountain';
+    const path = fountain ? fountainPath(points, mark) : new Path2D();
+    if (!fountain) path.moveTo(points[0].x, points[0].y);
     for (const point of points.slice(1)) {
       bounds.left = Math.min(bounds.left, point.x);
       bounds.right = Math.max(bounds.right, point.x);
       bounds.top = Math.min(bounds.top, point.y);
       bounds.bottom = Math.max(bounds.bottom, point.y);
-      path.lineTo(point.x, point.y);
+      if (!fountain) path.lineTo(point.x, point.y);
     }
-    if (points.length === 1) path.lineTo(points[0].x + 0.01, points[0].y);
+    if (!fountain && points.length === 1) path.lineTo(points[0].x + 0.01, points[0].y);
     result = { points, bounds: inflate(bounds, ruleWidth(mark) / 2), path };
     geometry.set(mark, result);
     return result;
@@ -420,14 +571,19 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
   function paintMark(context, mark, { live = false, opacity = 1 } = {}) {
     const points = mark.pts;
     context.save();
+    if (mark.type === 'fountain') {
+      context.fillStyle = mark.color;
+      context.fill(live ? fountainPath(fountainPoints(points), mark) : markGeometry(mark).path);
+      context.restore();
+      return;
+    }
     context.strokeStyle = mark.color;
     context.lineWidth = ruleWidth(mark);
     context.lineCap = 'round';
     context.lineJoin = 'round';
-    const brushAlpha = mark.type === 'marker' ? 0.28 : mark.type === 'pencil' ? 0.82 : 1;
-    context.globalAlpha = opacity * brushAlpha;
+    context.globalAlpha = opacity * brushAlpha(mark.type);
     if (mark.dashed) {
-      context.setLineDash([Math.max(4, mark.w * 3), Math.max(3, mark.w * 2)]);
+      context.setLineDash(dashPattern(mark));
       context.lineDashOffset = mark.phase || 0;
     }
     if (live && !shapeKinds.has(mark.type)) {
@@ -528,15 +684,16 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
 
   function eraseAcross(marks, start, end) {
     const sweep = makeSweep(start, end);
-    const eraserRadius = clamp(brush.width * 2, 7, 50) / camera.z;
+    const eraserRadius = eraserSize / (2 * camera.z);
     const region = inflate(rectangle(start, end), eraserRadius);
     let erased = false;
     const result = marks.flatMap(mark => {
       const { bounds, points } = markGeometry(mark);
       if (!overlaps(bounds, region)) return [mark];
-      const radius = eraserRadius + ruleWidth(mark) / 2;
+      const inkRadius = ruleWidth(mark) / 2;
       if (points.length === 1) {
-        if (distanceToSegment(points[0], start, end) > radius) return [mark];
+        if (distanceToSegment(points[0], start, end) >
+            eraserRadius + inkRadius * (points[0].weight ?? 1)) return [mark];
         erased = true;
         return [];
       }
@@ -549,9 +706,9 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
         if (to - from <= pointEpsilon) return;
         if (!ink.length) {
           phase = travelled + from * segmentLength;
-          ink.push(lerp(a, b, from));
+          ink.push(inkLerp(a, b, from));
         }
-        ink.push(lerp(a, b, to));
+        ink.push(inkLerp(a, b, to));
       }
       function finish() {
         if (ink.length) fragments.push({ ...mark, pts: ink, smooth: true, phase });
@@ -562,8 +719,9 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
         const b = points[index];
         const delta = subtract(b, a);
         const segmentLength = length(delta);
-        const cut = overlaps(inflate(rectangle(a, b), ruleWidth(mark) / 2), region)
-          ? segmentRangeInSweep(a, delta, sweep, radius)
+        const radius = inkRadius * Math.max(a.weight ?? 1, b.weight ?? 1);
+        const cut = overlaps(inflate(rectangle(a, b), radius), region)
+          ? segmentRangeInSweep(a, delta, sweep, eraserRadius + radius)
           : null;
         if (cut) {
           erased = true;
@@ -639,8 +797,14 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
         }
       } else {
         const mark = gesture.kind === 'laser' ? laser.mark : gesture.mark;
-        if (shapeKinds.has(mark.type)) mark.pts[1] = world;
-        else if (length(subtract(world, mark.pts.at(-1))) >= 0.35 / camera.z) mark.pts.push(world);
+        if (shapeKinds.has(mark.type)) {
+          mark.pts[1] = world;
+        } else if (length(subtract(world, mark.pts.at(-1))) >= 0.35 / camera.z) {
+          if (mark.type === 'fountain') {
+            world.pressure = fountainPressure(sample, mark.pts.at(-1).pressure);
+          }
+          mark.pts.push(world);
+        }
       }
     }
     requestDraw();
@@ -699,6 +863,7 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
         type: tool, color: tool === 'laser' ? '#ee3858' : brush.color, w: brush.width,
         dashed: tool !== 'laser' && brush.dashed, phase: 0, pts: [start],
       };
+      if (tool === 'fountain') start.pressure = fountainPressure(event);
       if (tool === 'laser') {
         laser = { mark, stopped: 0 };
         gesture = { ...base, kind: 'laser' };
@@ -732,7 +897,8 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
       const mark = finished.mark;
       const shape = shapeKinds.has(mark.type);
       if (!shape || length(subtract(mark.pts[0], mark.pts.at(-1))) > 1 / camera.z) {
-        const pts = shape ? mark.pts : smoothPoints(mark.pts);
+        const pts = shape ? mark.pts
+          : mark.type === 'fountain' ? fountainPoints(mark.pts) : smoothPoints(mark.pts);
         const complete = { ...mark, pts, smooth: true };
         commit({ ...note, marks: [...note.marks, complete],
           height: Math.max(note.height, markGeometry(complete).bounds.bottom + 280) });
@@ -757,7 +923,10 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
       const moved = new Set();
       const marks = note.marks.map(mark => {
         if (!selection.has(mark)) return mark;
-        const result = { ...mark, pts: mark.pts.map(point => add(point, finished.delta)) };
+        const result = {
+          ...mark,
+          pts: mark.pts.map(point => ({ ...point, ...add(point, finished.delta) })),
+        };
         moved.add(result);
         return result;
       });
@@ -864,6 +1033,9 @@ export function createEditor(canvas, { onChange = () => {} } = {}) {
       if (typeof color === 'string') brush.color = color;
       if (Number.isFinite(size)) brush.width = clamp(size, 0.2, 60);
       if (typeof dashed === 'boolean') brush.dashed = dashed;
+    },
+    setEraserSize(size) {
+      if (Number.isFinite(size)) eraserSize = clamp(size, eraserSizes.min, eraserSizes.max);
     },
     setPaper(paper) {
       if (!paperKinds.has(paper) || note.paper === paper) return;

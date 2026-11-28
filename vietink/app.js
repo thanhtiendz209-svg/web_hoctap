@@ -1,4 +1,4 @@
-import { createEditor } from './editor.js?v=0.4.0';
+import { createEditor, eraserSizes, paintBrushPreview } from './editor.js?v=0.5.0';
 
 const icons = {
   new: '<path d="M12 19H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8l4 4v4m-5-8v5h5m0 5v7m-3.5-3.5h7"/>',
@@ -8,6 +8,7 @@ const icons = {
   undo: '<path d="M8 5 4 9l4 4m-4-4h10a5 5 0 0 1 0 10h-1"/>',
   redo: '<path d="m16 5 4 4-4 4m4-4H10a5 5 0 0 0 0 10h1"/>',
   pen: '<path d="m5 19 3-1 10-10-3-3L5 15l-1 5 1-1Zm9-13 3 3m-3-4 2-2 4 4-2 2M8 18l-3-3"/>',
+  fountain: '<path d="m4 20 7.5-2 7-7-5.5-5.5-7 7L4 20Zm9-14.5 2.5-2.5L21 8.5 18.5 11M4 20l5.6-5.6"/><circle cx="11" cy="13" r="1.45"/>',
   pencil: '<path d="m4 20 1-5L16 4l4 4L9 19l-5 1Zm10-14 4 4M5 15l4 4m-2-2L16 8"/>',
   marker: '<path d="m3 19 4-1 2-2-3-3-2 2-1 4Zm3-6 9-9 5 5-9 9-5-5Zm7-7 5 5M3 21h9"/>',
   eraser: '<path d="m11 20-7-7a2 2 0 0 1 0-2.8l6.7-6.7a2 2 0 0 1 2.8 0l7 7a2 2 0 0 1 0 2.8l-6.7 6.7H11ZM8 7.5l8.5 8.5M12 20h8"/>',
@@ -22,6 +23,7 @@ const icons = {
   line: '<path d="m5 19 14-14"/>', rect: '<rect x="4" y="6" width="16" height="12" rx="1.5"/>',
   ellipse: '<ellipse cx="12" cy="12" rx="8" ry="6"/>',
   trash: '<path d="M4 7h16m-10 4v6m4-6v6M7 7l1 13h8l1-13M9 7V4h6v3"/>',
+  more: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
 function icon(name) {
@@ -32,7 +34,7 @@ const $ = (id) => document.getElementById(id);
 const all = (selector) => [...document.querySelectorAll(selector)];
 for (const host of all('[data-icon]')) host.insertAdjacentHTML('afterbegin', icon(host.dataset.icon));
 
-const nibNames = { pen: 'Bút bi', pencil: 'Bút chì', marker: 'Dạ quang' };
+const nibNames = { pen: 'Bút bi', fountain: 'Bút mực', pencil: 'Bút chì', marker: 'Dạ quang' };
 const shapeNames = { line: 'Đường thẳng', rect: 'Hình chữ nhật', ellipse: 'Hình elip' };
 const colors = [
   ['#20334b', 'Xanh đen'], ['#186b5f', 'Xanh ngọc'], ['#276cc2', 'Xanh lam'],
@@ -43,15 +45,43 @@ const colors = [
 ];
 const brushes = {
   pen: { color: colors[0][0], width: 3, dashed: false },
+  fountain: { color: colors[2][0], width: 6, dashed: false },
   pencil: { color: '#697884', width: 2, dashed: false },
   marker: { color: '#f0b941', width: 6, dashed: false },
 };
+const preferenceKey = 'ink-study-tools-v1';
 let mode = 'pen';
 let nib = 'pen';
+let eraserSize = eraserSizes.initial;
 let shape = 'line';
 let openedPanel = null;
 let state;
 const canvas = $('paper-canvas');
+const eraserCursor = $('eraser-cursor');
+
+try {
+  const preferences = JSON.parse(localStorage.getItem(preferenceKey));
+  if (Object.hasOwn(brushes, preferences?.nib)) nib = preferences.nib;
+  if (Number.isFinite(preferences?.eraserSize)) {
+    eraserSize = Math.min(eraserSizes.max, Math.max(eraserSizes.min, Math.round(preferences.eraserSize)));
+  }
+  for (const [kind, brush] of Object.entries(brushes)) {
+    const saved = preferences?.brushes?.[kind];
+    if (typeof saved?.color === 'string' && /^#[0-9a-f]{6}$/i.test(saved.color)) brush.color = saved.color;
+    if (Number.isFinite(saved?.width)) brush.width = Math.min(20, Math.max(1, saved.width));
+    if (typeof saved?.dashed === 'boolean') brush.dashed = saved.dashed;
+  }
+} catch {
+  // The drawing tools are still usable when local storage is unavailable.
+}
+
+function savePreferences() {
+  try {
+    localStorage.setItem(preferenceKey, JSON.stringify({ nib, brushes, eraserSize }));
+  } catch {
+    // A storage restriction should not prevent the user from drawing.
+  }
+}
 
 function renderState(next) {
   state = next;
@@ -60,6 +90,7 @@ function renderState(next) {
   $('zoom-fit').textContent = `${Math.round(next.zoom * 100)}%`;
   $('undo').disabled = !next.canUndo;
   $('redo').disabled = !next.canRedo;
+  $('more-redo').disabled = !next.canRedo;
   $('selection-strip').hidden = next.selectedCount === 0;
   $('selection-count').textContent = `Đã chọn ${next.selectedCount} đối tượng`;
   if (next.selectedCount && mode !== 'select') activate('select');
@@ -77,16 +108,26 @@ const editor = createEditor(canvas, {
 });
 
 function activate(next) {
+  if (next !== mode) eraserCursor.hidden = true;
   mode = next;
   canvas.dataset.tool = next;
   editor.setTool(next);
   editor.setBrush(brushes[nib]);
   for (const button of all('[data-mode]')) {
     const selected = button.id === 'pen'
-      ? next in brushes
-      : button.id === 'shape' ? next in shapeNames : button.dataset.mode === next;
+      ? Object.hasOwn(brushes, next)
+      : button.dataset.mode === next;
     button.setAttribute('aria-pressed', selected);
   }
+  const shapeButton = $('shape-options');
+  const shapeActive = Object.hasOwn(shapeNames, mode);
+  shapeButton.setAttribute('aria-pressed', shapeActive);
+  shapeButton.querySelector('svg').outerHTML = icon(shapeActive ? shape : 'shapes');
+  const more = $('more-options');
+  const actionIcon = mode === 'pan' ? 'hand' : mode === 'laser' ? 'laser' : 'more';
+  more.querySelector('svg').outerHTML = icon(actionIcon);
+  more.querySelector('span').textContent = mode === 'pan' ? 'Cuộn' : mode === 'laser' ? 'Laser' : 'Thêm';
+  more.setAttribute('aria-pressed', actionIcon !== 'more');
   updateBrush();
 }
 
@@ -96,17 +137,16 @@ function updateBrush() {
   penButton.querySelector('svg').outerHTML = icon(nib);
   penButton.title = `${nibNames[nib]} (B)`;
   penButton.setAttribute('aria-label', nibNames[nib]);
-  $('shape').title = shapeNames[shape];
-  $('shape').setAttribute('aria-label', shapeNames[shape]);
+  penButton.style.setProperty('--brush-color', brush.color);
+  const rgb = Number.parseInt(brush.color.slice(1), 16);
+  const brightness = 0.299 * (rgb >> 16) + 0.587 * ((rgb >> 8) & 255) + 0.114 * (rgb & 255);
+  penButton.toggleAttribute('data-light-ink', brightness > 173);
+  $('pen-label').textContent = nibNames[nib];
   $('stroke-width').value = brush.width;
   $('stroke-size').value = `${brush.width} px`;
   $('dashed').checked = brush.dashed;
-  const width = nib === 'marker' ? brush.width * 3 : nib === 'pencil' ? brush.width * 0.85 : brush.width;
-  const preview = $('preview-stroke');
-  preview.setAttribute('stroke', brush.color);
-  preview.setAttribute('stroke-width', width);
-  preview.setAttribute('stroke-opacity', nib === 'marker' ? '.36' : '1');
-  preview.setAttribute('stroke-dasharray', brush.dashed ? `${width * 2.5} ${width * 2}` : '');
+  paintBrushPreview($('preview-stroke'), { ...brush, type: nib, w: brush.width });
+  colorInput.value = brush.color;
   for (const button of all('[data-color]')) {
     button.setAttribute('aria-pressed', button.dataset.color === brush.color);
   }
@@ -116,7 +156,8 @@ function updateBrush() {
 
 function setColor(color) {
   brushes[nib].color = color;
-  activate(mode in shapeNames ? mode : nib);
+  activate(Object.hasOwn(shapeNames, mode) ? mode : nib);
+  savePreferences();
 }
 
 function addSwatches(container, palette) {
@@ -159,22 +200,33 @@ function positionPanel() {
   if (!openedPanel) return;
   const { button, panel } = openedPanel;
   const rect = button.getBoundingClientRect();
-  panel.style.left = `${Math.max(8, Math.min(rect.left - 28, innerWidth - panel.offsetWidth - 8))}px`;
-  panel.style.top = `${rect.bottom + 10}px`;
+  const anchor = button.closest('.split-tool')?.getBoundingClientRect() ?? rect;
+  const left = anchor.left + (anchor.width - panel.offsetWidth) / 2;
+  const top = rect.bottom + 8;
+  panel.style.left = `${Math.max(8, Math.min(left, innerWidth - panel.offsetWidth - 8))}px`;
+  panel.style.top = `${top}px`;
+  panel.style.setProperty('--panel-height', `calc(100dvh - ${top + 8}px - env(safe-area-inset-bottom))`);
 }
 
-for (const [buttonId, panelId] of [['brush-options', 'brush-panel'], ['shape-options', 'shape-panel']]) {
+for (const [buttonId, panelId, activateTool] of [
+  ['brush-options', 'brush-panel', () => activate(nib)],
+  ['eraser-options', 'eraser-panel', () => activate('eraser')],
+  ['shape-options', 'shape-panel'],
+  ['more-options', 'more-panel'],
+]) {
   const button = $(buttonId);
   const panel = $(panelId);
   button.onclick = () => {
     const wasOpen = openedPanel?.button === button;
     closePanel();
     if (wasOpen) return;
-    colorInput.value = brushes[nib].color;
+    activateTool?.();
     openedPanel = { button, panel };
     panel.hidden = false;
     button.setAttribute('aria-expanded', 'true');
     positionPanel();
+    panel.tabIndex = -1;
+    panel.focus({ preventScroll: true });
   };
 }
 for (const button of all('[data-close-panel]')) button.onclick = () => closePanel(true);
@@ -185,12 +237,16 @@ window.addEventListener('resize', positionPanel);
 document.querySelector('.ribbon').addEventListener('scroll', positionPanel);
 
 for (const button of all('[data-mode]')) {
-  button.onclick = () => activate(button.id === 'pen' ? nib : button.id === 'shape' ? shape : button.dataset.mode);
+  button.onclick = () => {
+    activate(button.id === 'pen' ? nib : button.dataset.mode);
+    closePanel(true);
+  };
 }
 for (const button of all('[data-nib]')) {
   button.onclick = () => {
     nib = button.dataset.nib;
     activate(nib);
+    savePreferences();
   };
 }
 for (const button of all('[data-shape]')) {
@@ -202,15 +258,65 @@ for (const button of all('[data-shape]')) {
 }
 $('stroke-width').oninput = (event) => {
   brushes[nib].width = Number(event.target.value);
-  activate(mode in shapeNames ? mode : nib);
+  activate(nib);
+  savePreferences();
 };
 $('dashed').onchange = (event) => {
   brushes[nib].dashed = event.target.checked;
-  activate(mode in shapeNames ? mode : nib);
+  activate(nib);
+  savePreferences();
 };
+
+function updateEraserSize(size) {
+  eraserSize = size;
+  editor.setEraserSize(size);
+  canvas.parentElement.style.setProperty('--eraser-size', `${size}px`);
+  $('eraser-panel').style.setProperty('--eraser-size', `${size}px`);
+  $('eraser-width').value = size;
+  $('eraser-size').value = `${size} px`;
+  for (const button of all('[data-eraser-size]')) {
+    button.setAttribute('aria-pressed', Number(button.dataset.eraserSize) === size);
+  }
+}
+
+const eraserSlider = $('eraser-width');
+eraserSlider.min = eraserSizes.min;
+eraserSlider.max = eraserSizes.max;
+eraserSlider.oninput = () => {
+  updateEraserSize(eraserSlider.valueAsNumber);
+  savePreferences();
+};
+for (const button of all('[data-eraser-size]')) {
+  button.onclick = () => {
+    updateEraserSize(Number(button.dataset.eraserSize));
+    savePreferences();
+  };
+}
+updateEraserSize(eraserSize);
+
+function moveEraserCursor(event) {
+  const invertedPen = event.pointerType === 'pen' && (event.buttons & 32) !== 0;
+  eraserCursor.hidden = mode !== 'eraser' && !invertedPen;
+  if (eraserCursor.hidden) return;
+  const half = eraserSize / 2;
+  eraserCursor.style.transform = `translate3d(${event.offsetX - half}px, ${event.offsetY - half}px, 0)`;
+}
+for (const name of ['pointerdown', 'pointermove']) {
+  canvas.addEventListener(name, moveEraserCursor);
+}
+for (const name of ['pointerleave', 'pointercancel']) {
+  canvas.addEventListener(name, () => { eraserCursor.hidden = true; });
+}
+canvas.addEventListener('pointerup', (event) => {
+  if (event.pointerType !== 'mouse') eraserCursor.hidden = true;
+});
 
 $('undo').onclick = () => editor.undo();
 $('redo').onclick = () => editor.redo();
+$('more-redo').onclick = () => {
+  editor.redo();
+  closePanel(true);
+};
 $('paper').onchange = () => editor.setPaper($('paper').value);
 $('title').oninput = () => editor.setTitle($('title').value);
 $('title').onblur = () => { $('title').value = state.title; };
