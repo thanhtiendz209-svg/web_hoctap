@@ -27,6 +27,7 @@ void main() {
           paper: PaperKind.ruled,
           pdfAsset: 'page.pdf',
           pdfPages: [PdfPageInfo(width: 600, height: 800)],
+          pdfGaps: [PdfWritingGap(page: 0, sourceY: 70, height: 180)],
           pdfRegions: [
             PdfRegion(
               page: 0,
@@ -88,6 +89,10 @@ void main() {
       expect(
         imported.document.pdfRegions.single.toJson(),
         note.document.pdfRegions.single.toJson(),
+      );
+      expect(
+        imported.document.pdfGaps.single.toJson(),
+        note.document.pdfGaps.single.toJson(),
       );
       final image = imported.document.images.single;
       expect(image.asset, isNot('figure.png'));

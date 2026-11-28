@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'dart:ui';
+import 'dart:ui' as ui show Image;
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
@@ -9,6 +10,121 @@ import 'package:ink_study/canvas.dart';
 import 'package:ink_study/model.dart';
 
 void main() {
+  testWidgets('PDF writing space shifts content and is kept in the export', (
+    tester,
+  ) async {
+    const ink = Color(0xff343975);
+    final recorder = PictureRecorder();
+    Canvas(recorder)
+      ..drawRect(
+        const Rect.fromLTWH(0, 0, 100, 50),
+        Paint()..color = Colors.blue,
+      )
+      ..drawRect(
+        const Rect.fromLTWH(0, 50, 100, 50),
+        Paint()..color = Colors.red,
+      );
+    final picture = recorder.endRecording();
+    final page = picture.toImageSync(100, 100);
+    picture.dispose();
+    addTearDown(page.dispose);
+    const original = InkDocument(
+      pdfAsset: 'page.pdf',
+      pdfPages: [
+        PdfPageInfo(width: 900, height: 900),
+        PdfPageInfo(width: 900, height: 900),
+      ],
+      paper: PaperKind.blank,
+      paperColor: Color(0xffffffff),
+      strokes: [
+        InkStroke(points: [InkPoint(Offset(220, 260))], color: ink, width: 3),
+        InkStroke(points: [InkPoint(Offset(220, 480))], color: ink, width: 3),
+      ],
+    );
+    var document = original;
+    final canvas = GlobalKey<InkCanvasState>();
+    final store = _PdfRasterStore(page);
+    Future<void> mount() => tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: InkCanvas(
+            key: canvas,
+            document: document,
+            store: store,
+            onChange: (next) => document = next,
+            tool: Tool.pdfSpace,
+            color: ink,
+            width: 3,
+            penKind: PenKind.ballpoint,
+            dashed: false,
+            shapeKind: ShapeKind.line,
+            zoom: 0.5,
+            scroll: 0,
+            onViewportChanged: (_, _) {},
+          ),
+        ),
+      ),
+    );
+    await mount();
+    final before = canvas.currentState!.contentBounds;
+    final gesture = await tester.startGesture(
+      const Offset(400, 225),
+      kind: PointerDeviceKind.mouse,
+    );
+    await gesture.moveBy(const Offset(0, 60));
+    await gesture.up();
+    expect(document.pdfGaps.single.sourceY, 450);
+    expect(document.pdfGaps.single.height, 120);
+    expect(document.strokes.first, same(original.strokes.first));
+    expect(document.strokes.last.points.single.position.dy, 600);
+    await mount();
+    expect(canvas.currentState!.contentBounds.bottom, before.bottom + 120);
+
+    final colors = await tester.runAsync(() async {
+      final data = await canvas.currentState!.render(
+        const Rect.fromLTWH(0, 0, 900, 1100),
+        0.2,
+      );
+      final codec = await instantiateImageCodec(data);
+      final frame = (await codec.getNextFrame()).image;
+      try {
+        final pixels = (await frame.toByteData())!;
+        Color pixel(int y) {
+          final offset = (y * frame.width + 70) * 4;
+          return Color.fromARGB(
+            255,
+            pixels.getUint8(offset),
+            pixels.getUint8(offset + 1),
+            pixels.getUint8(offset + 2),
+          );
+        }
+
+        return [pixel(82), pixel(100), pixel(122), pixel(209)];
+      } finally {
+        frame.dispose();
+        codec.dispose();
+      }
+    });
+    expect(colors, const [
+      Color(0xff2196f3),
+      Color(0xffffffff),
+      Color(0xfff44336),
+      Color(0xff2196f3),
+    ]);
+
+    final extend = await tester.startGesture(
+      const Offset(400, 245),
+      kind: PointerDeviceKind.mouse,
+    );
+    await extend.moveBy(const Offset(0, 20));
+    await extend.up();
+    await mount();
+    expect(document.pdfGaps.last.sourceY, 450);
+    expect(canvas.currentState!.contentBounds.bottom, before.bottom + 160);
+    expect(document.strokes.last.points.single.position.dy, 640);
+    await tester.pumpWidget(const SizedBox());
+  });
+
   testWidgets('mouse draws and partially erases through the canvas', (
     tester,
   ) async {
@@ -271,4 +387,17 @@ void main() {
       expect(document.shapes, isEmpty);
     },
   );
+}
+
+class _PdfRasterStore implements InkStore {
+  _PdfRasterStore(this.page);
+
+  final ui.Image page;
+
+  @override
+  Future<ui.Image> pdfPage(String asset, int index, int pixelWidth) async =>
+      page.clone();
+
+  @override
+  dynamic noSuchMethod(Invocation invocation) => super.noSuchMethod(invocation);
 }

@@ -72,7 +72,7 @@ enum ShapeKind {
   cylinder,
 }
 
-enum Tool { pen, eraser, select, shape, laser, hand, pdfCrop }
+enum Tool { pen, eraser, select, shape, laser, hand, pdfCrop, pdfSpace }
 
 const minEraserWidth = 6.0;
 const maxEraserWidth = 72.0;
@@ -363,6 +363,34 @@ class PdfRegion {
 
 const _unchanged = Object();
 
+class PdfWritingGap {
+  const PdfWritingGap({
+    required this.page,
+    required this.sourceY,
+    required this.height,
+  });
+
+  final int page;
+
+  /// Position measured in PDF points from the top of the source page.
+  final double sourceY;
+
+  /// Space measured in document coordinates, independent of zoom.
+  final double height;
+
+  Map<String, Object?> toJson() => {
+    'page': page,
+    'sourceY': sourceY,
+    'height': height,
+  };
+
+  factory PdfWritingGap.fromJson(Map<String, dynamic> data) => PdfWritingGap(
+    page: data['page'] as int,
+    sourceY: (data['sourceY'] as num).toDouble(),
+    height: (data['height'] as num).toDouble(),
+  );
+}
+
 class InkDocument {
   const InkDocument({
     this.strokes = const [],
@@ -371,6 +399,7 @@ class InkDocument {
     this.pdfAsset,
     this.pdfPages = const [],
     this.pdfRegions = const [],
+    this.pdfGaps = const [],
     this.paper = PaperKind.grid,
     this.paperColor = const Color(0xfff9fafc),
   });
@@ -381,6 +410,7 @@ class InkDocument {
   final String? pdfAsset;
   final List<PdfPageInfo> pdfPages;
   final List<PdfRegion> pdfRegions;
+  final List<PdfWritingGap> pdfGaps;
   final PaperKind paper;
   final Color paperColor;
 
@@ -391,6 +421,7 @@ class InkDocument {
     Object? pdfAsset = _unchanged,
     List<PdfPageInfo>? pdfPages,
     List<PdfRegion>? pdfRegions,
+    List<PdfWritingGap>? pdfGaps,
     PaperKind? paper,
     Color? paperColor,
   }) => InkDocument(
@@ -404,9 +435,52 @@ class InkDocument {
     pdfRegions: pdfRegions == null
         ? this.pdfRegions
         : List.unmodifiable(pdfRegions),
+    pdfGaps: pdfGaps == null ? this.pdfGaps : List.unmodifiable(pdfGaps),
     paper: paper ?? this.paper,
     paperColor: paperColor ?? this.paperColor,
   );
+
+  InkDocument insertPdfWritingGap(PdfWritingGap gap, double documentY) {
+    final shift = Offset(0, gap.height);
+    // Move complete annotations so a line, shape or image keeps its geometry.
+    return copyWith(
+      pdfGaps: [...pdfGaps, gap],
+      strokes: [
+        for (final stroke in strokes)
+          if (stroke.points.isNotEmpty &&
+              inkStrokeBounds(stroke).center.dy >= documentY)
+            stroke.copyWith(
+              points: [
+                for (final point in stroke.points)
+                  InkPoint(point.position + shift, point.pressure),
+              ],
+            )
+          else
+            stroke,
+      ],
+      shapes: [
+        for (final shape in shapes)
+          if (shape.bounds.center.dy >= documentY)
+            shape.copyWith(start: shape.start + shift, end: shape.end + shift)
+          else
+            shape,
+      ],
+      images: [
+        for (final image in images)
+          if (image.bounds.center.dy >= documentY)
+            image.copyWith(bounds: image.bounds.shift(shift))
+          else
+            image,
+      ],
+      pdfRegions: [
+        for (final region in pdfRegions)
+          if (region.bounds.center.dy >= documentY)
+            region.copyWith(bounds: region.bounds.shift(shift))
+          else
+            region,
+      ],
+    );
+  }
 
   Map<String, Object?> toJson() => {
     'strokes': strokes.map((stroke) => stroke.toJson()).toList(),
@@ -415,6 +489,8 @@ class InkDocument {
     'pdfAsset': pdfAsset,
     'pdfPages': pdfPages.map((page) => page.toJson()).toList(),
     'pdfRegions': pdfRegions.map((region) => region.toJson()).toList(),
+    if (pdfGaps.isNotEmpty)
+      'pdfGaps': pdfGaps.map((gap) => gap.toJson()).toList(),
     'paper': paper.name,
     'paperColor': paperColor.toARGB32(),
   };
@@ -426,6 +502,7 @@ class InkDocument {
     pdfAsset: data['pdfAsset'] as String?,
     pdfPages: _objects(data['pdfPages'], PdfPageInfo.fromJson),
     pdfRegions: _objects(data['pdfRegions'], PdfRegion.fromJson),
+    pdfGaps: _objects(data['pdfGaps'], PdfWritingGap.fromJson),
     paper: _enum(PaperKind.values, data['paper'], PaperKind.grid),
     paperColor: _color(data['paperColor'], const Color(0xfff9fafc)),
   );

@@ -224,13 +224,15 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     }
   }
 
+  bool get _editingPdf => _tool == Tool.pdfCrop || _tool == Tool.pdfSpace;
+
   void _activate(String id) {
     if (id == _activeId) return;
     _finishRegion(null);
     setState(() {
       _activeId = id;
       _canvas = GlobalKey<InkCanvasState>();
-      if (_tool == Tool.pdfCrop) _tool = Tool.pen;
+      if (_editingPdf) _tool = Tool.pen;
     });
     _scheduleSave();
   }
@@ -284,7 +286,9 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     if (from.isEmpty) return;
     final to = redo ? history.undo : history.redo;
     to.add(note.document);
-    _replaceNote(note.copyWith(document: from.removeLast()));
+    final document = from.removeLast();
+    if (document.pdfAsset == null && _editingPdf) _tool = Tool.pen;
+    _replaceNote(note.copyWith(document: document));
   }
 
   void _scheduleSave({bool notify = true}) {
@@ -507,11 +511,14 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
               pdfAsset: pdf.asset,
               pdfPages: pdf.pages,
               pdfRegions: const [],
+              pdfGaps: const [],
             ),
           ),
           record: true,
         );
-        _toast('Đã chèn PDF. Chọn Chèn → Chỉnh vùng PDF để kéo giãn một vùng.');
+        _toast(
+          'Đã chèn PDF. Chọn Chèn → Chèn khoảng viết để thêm chỗ ghi chú.',
+        );
       } else if (image != null) {
         _replaceNote(
           latest.copyWith(
@@ -1481,21 +1488,31 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
             _setTool(Tool.pdfCrop);
             return;
           }
+          if (action == 'space') {
+            _setTool(Tool.pdfSpace);
+            return;
+          }
           if (action == 'remove') {
             _document(
               note.document.copyWith(
                 pdfAsset: null,
                 pdfPages: const [],
                 pdfRegions: const [],
+                pdfGaps: const [],
               ),
             );
-            if (_tool == Tool.pdfCrop) _setTool(Tool.pen);
+            if (_editingPdf) _setTool(Tool.pen);
             return;
           }
           unawaited(_insert(action: action));
         },
         itemBuilder: (_) => [
           const PopupMenuItem(value: 'pdf', child: Text('PDF làm nền')),
+          PopupMenuItem(
+            value: 'space',
+            enabled: note.document.pdfAsset != null,
+            child: const Text('Chèn khoảng viết'),
+          ),
           PopupMenuItem(
             value: 'crop',
             enabled: note.document.pdfAsset != null,
@@ -1514,7 +1531,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           Icons.add_circle_outline_rounded,
           'Chèn',
           showLabel: showLabels,
-          selected: _tool == Tool.pdfCrop,
+          selected: _editingPdf,
         ),
       ),
       PopupMenuButton<String>(
@@ -1818,7 +1835,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           onError: _toast,
           onQuickSelect: () => _setTool(Tool.select),
         ),
-        if (_tool == Tool.pdfCrop && _exportSelection == null)
+        if (_editingPdf && _exportSelection == null)
           Positioned(
             left: 12,
             top: 12,
@@ -1830,10 +1847,16 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    const Text('Kéo khung trong một trang PDF'),
+                    Text(
+                      _tool == Tool.pdfSpace
+                          ? 'Kéo xuống từ khoảng giữa hai dòng'
+                          : 'Kéo khung trong một vùng PDF',
+                    ),
                     const SizedBox(width: 10),
                     TextButton(
-                      onPressed: () => _setTool(Tool.select),
+                      onPressed: () => _setTool(
+                        _tool == Tool.pdfSpace ? Tool.pen : Tool.select,
+                      ),
                       child: const Text('Xong'),
                     ),
                   ],

@@ -291,6 +291,17 @@ class InkStore {
                 page.height <= 0 ||
                 !(page.height / page.width).isFinite,
           ) ||
+          document.pdfGaps.any(
+            (gap) =>
+                document.pdfAsset == null ||
+                gap.page < 0 ||
+                gap.page >= document.pdfPages.length ||
+                !gap.sourceY.isFinite ||
+                gap.sourceY <= 0 ||
+                gap.sourceY >= document.pdfPages[gap.page].height ||
+                !gap.height.isFinite ||
+                gap.height <= 0,
+          ) ||
           document.pdfRegions.any(
             (region) =>
                 region.page < 0 ||

@@ -8,6 +8,7 @@ import 'package:ink_study/canvas.dart';
 import 'package:ink_study/main.dart';
 import 'package:ink_study/model.dart';
 import 'package:ink_study/tool_shelf.dart';
+import 'package:window_manager/window_manager.dart';
 
 void main() {
   testWidgets(
@@ -18,6 +19,7 @@ void main() {
       final messenger =
           TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
       final directory = Directory.systemTemp.createTempSync('ink-study-desk-');
+      var closed = false;
       addTearDown(() {
         messenger.setMockMethodCallHandler(pathProvider, null);
         messenger.setMockMethodCallHandler(windowManager, null);
@@ -29,6 +31,7 @@ void main() {
         return directory.path;
       });
       messenger.setMockMethodCallHandler(windowManager, (call) async {
+        if (call.method == 'destroy') closed = true;
         return switch (call.method) {
           'isMaximized' || 'isFullScreen' => false,
           _ => null,
@@ -206,6 +209,17 @@ void main() {
       await tester.pumpAndSettle();
       expect(find.text('Nhập ghi chú (.inkstudy)'), findsOneWidget);
 
+      // Finish the queued file writes before deleting the Windows fixture.
+      final desk = tester.state(find.byType(StudyDesk)) as WindowListener;
+      await tester.runAsync(() async {
+        desk.onWindowClose();
+        final timeout = DateTime.now().add(const Duration(seconds: 5));
+        while (!closed && DateTime.now().isBefore(timeout)) {
+          await tester.pump();
+          await Future<void>.delayed(const Duration(milliseconds: 10));
+        }
+        expect(closed, isTrue);
+      });
       await tester.pumpWidget(const SizedBox());
     },
     variant: TargetPlatformVariant({TargetPlatform.windows}),

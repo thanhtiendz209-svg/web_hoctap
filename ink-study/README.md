@@ -12,6 +12,7 @@
 - Dùng biểu tượng thư mục ở thanh dưới để **Sao lưu ghi chú (.inkstudy)** hoặc **Nhập ghi chú (.inkstudy)**. Tệp lưu nét viết, hình, ảnh và PDF đi kèm. Ghi chú nhập được thêm riêng vào thư viện. Trong menu **⋮** cạnh ghi chú, chọn **Nhân bản ghi chú** nếu muốn sửa một bản sao.
 - Dùng nút **−** và **□ / ❐** bên phải thanh công cụ để thu nhỏ, phóng to hoặc khôi phục cửa sổ. Nhấn **F11** để viết toàn màn hình và **F11** hoặc **Esc** để trở lại. Biểu tượng **Trình bày với laser** ở thanh dưới mở chế độ trình chiếu.
 - Dùng **Chèn → PDF làm nền**. Để chỉnh sơ đồ, chọn **Chèn → Chỉnh vùng PDF**, khoanh vùng trong một trang rồi chọn **Tách vùng**. Kéo cạnh khung để giãn theo một chiều.
+- Chọn **Chèn → Chèn khoảng viết**, đặt chuột giữa hai dòng rồi kéo xuống. Phần PDF phía dưới dịch xuống và khoảng mới dùng nền giấy của ghi chú. Kéo xuống trong một khoảng đã có để mở rộng thêm. Bấm **Xong** để viết hoặc **Ctrl+Z** để hoàn tác. Khoảng viết được lưu trong ghi chú, có trong bản sao `.inkstudy` và khi xuất PDF.
 - Dán ảnh với Ctrl+V. Dùng **Chọn vùng** rồi bấm vào một ảnh hoặc hình để hiện tay nắm chỉnh kích thước. Bấm chuột phải để xem các lệnh như xoay ảnh hoặc đổi kiểu cạnh của hình.
 - Bấm biểu tượng **Xuất PDF** ở thanh dưới để chọn toàn bộ, vùng đang xem hoặc một vùng khoanh trên giấy. Bản xuất PDF A4 giữ bố cục hiển thị dưới dạng ảnh có độ phân giải cao.
 

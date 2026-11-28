@@ -210,27 +210,36 @@ List<T> _withoutSelected<T>(List<T> objects, Set<int> selected) =>
       ];
 
 class _Page {
-  const _Page(this.index, this.info, this.bounds);
+  const _Page(this.index, this.info, this.bounds, this.bands);
 
   final int index;
   final PdfPageInfo info;
   final Rect bounds;
+  final List<_PdfBand> bands;
+}
 
-  Rect fromSource(Rect source) {
-    final scale = bounds.width / info.width;
+class _PdfBand {
+  const _PdfBand(this.index, this.source, this.bounds);
+
+  final int index;
+  final Rect source;
+  final Rect bounds;
+
+  Rect fromSource(Rect rect) {
+    final scale = bounds.width / source.width;
     return Rect.fromLTWH(
-      bounds.left + source.left * scale,
-      bounds.top + source.top * scale,
-      source.width * scale,
-      source.height * scale,
+      bounds.left + rect.left * scale,
+      bounds.top + (rect.top - source.top) * scale,
+      rect.width * scale,
+      rect.height * scale,
     );
   }
 
   Rect toSource(Rect rect) {
-    final scale = info.width / bounds.width;
+    final scale = source.width / bounds.width;
     return Rect.fromLTWH(
       (rect.left - bounds.left) * scale,
-      (rect.top - bounds.top) * scale,
+      source.top + (rect.top - bounds.top) * scale,
       rect.width * scale,
       rect.height * scale,
     );
@@ -239,14 +248,56 @@ class _Page {
 
 List<_Page> _pages(InkDocument document) {
   var top = 0.0;
+  final gapsByPage = <int, List<PdfWritingGap>>{};
+  for (final gap in document.pdfGaps) {
+    (gapsByPage[gap.page] ??= []).add(gap);
+  }
   return List<_Page>.generate(document.pdfPages.length, (index) {
     final info = document.pdfPages[index];
-    final height = _paperWidth * info.height / info.width;
-    final page = _Page(index, info, Rect.fromLTWH(0, top, _paperWidth, height));
-    top += height;
-    return page;
+    final scale = _paperWidth / info.width;
+    final pageTop = top;
+    final bands = <_PdfBand>[];
+    var sourceTop = 0.0;
+    void addBand(double end) {
+      if (end <= sourceTop) return;
+      final height = (end - sourceTop) * scale;
+      bands.add(
+        _PdfBand(
+          index,
+          Rect.fromLTRB(0, sourceTop, info.width, end),
+          Rect.fromLTWH(0, top, _paperWidth, height),
+        ),
+      );
+      top += height;
+      sourceTop = end;
+    }
+
+    final gaps = gapsByPage[index];
+    if (gaps != null) {
+      gaps.sort((a, b) => a.sourceY.compareTo(b.sourceY));
+      for (final gap in gaps) {
+        if (!gap.sourceY.isFinite ||
+            gap.sourceY <= 0 ||
+            gap.sourceY >= info.height ||
+            !gap.height.isFinite ||
+            gap.height <= 0) {
+          continue;
+        }
+        addBand(gap.sourceY);
+        top += gap.height;
+      }
+    }
+    addBand(info.height);
+    return _Page(
+      index,
+      info,
+      Rect.fromLTRB(0, pageTop, _paperWidth, top),
+      bands,
+    );
   });
 }
+
+typedef _PdfGapAnchor = ({int page, double sourceY, double documentY});
 
 class InkCanvas extends StatefulWidget {
   const InkCanvas({
@@ -337,9 +388,10 @@ class InkCanvasState extends State<InkCanvas>
   Rect? _selectionRectangle;
   Offset _groupMove = Offset.zero;
   _Handle? _handle;
-  _Page? _cropPage;
+  _PdfBand? _cropPage;
   Rect? _cropPreview;
-  ({_Page page, Rect crop})? _pendingCrop;
+  ({_PdfBand page, Rect crop})? _pendingCrop;
+  _PdfGapAnchor? _gapAnchor;
   List<Offset> _laser = <Offset>[];
   double? _pinchSpacing;
   Offset? _pinchCenter;
@@ -631,9 +683,11 @@ class InkCanvasState extends State<InkCanvas>
         }
       case Tool.pdfCrop:
         if (!_startSelection(point, pdfOnly: true)) {
-          _cropPage = _pageAt(point);
+          _cropPage = _pdfBandAt(point);
           _cropPreview = null;
         }
+      case Tool.pdfSpace:
+        _gapAnchor = _pdfGapAt(point);
       case Tool.hand:
         break;
     }
@@ -683,6 +737,7 @@ class InkCanvasState extends State<InkCanvas>
         } else {
           _moveSelection(origin, point);
         }
+      case Tool.pdfSpace:
       case null:
         break;
     }
@@ -743,6 +798,16 @@ class InkCanvasState extends State<InkCanvas>
     if (page != null && crop != null && crop.width > 4 && crop.height > 4) {
       setState(() => _pendingCrop = (page: page, crop: crop));
     }
+    final gap = _gapAnchor;
+    if (gap != null && _gestureOrigin != null) {
+      final height = point.dy - _gestureOrigin!.dy;
+      if (height * _zoom >= 6) {
+        update = widget.document.insertPdfWritingGap(
+          PdfWritingGap(page: gap.page, sourceY: gap.sourceY, height: height),
+          gap.documentY,
+        );
+      }
+    }
     if (_gestureTool == Tool.laser) _laserFade.forward(from: 0);
     final showEraser =
         _gestureTool == Tool.eraser &&
@@ -778,6 +843,7 @@ class InkCanvasState extends State<InkCanvas>
     _working = null;
     _cropPage = null;
     _cropPreview = null;
+    _gapAnchor = null;
     _handle = null;
     _selectingRectangle = false;
     _quickSelect = false;
@@ -831,9 +897,31 @@ class InkCanvasState extends State<InkCanvas>
     }
   }
 
-  _Page? _pageAt(Offset point) {
+  _PdfBand? _pdfBandAt(Offset point) {
     for (final page in _pages(widget.document)) {
-      if (page.bounds.contains(point)) return page;
+      if (!page.bounds.contains(point)) continue;
+      for (final band in page.bands) {
+        if (band.bounds.contains(point)) return band;
+      }
+    }
+    return null;
+  }
+
+  _PdfGapAnchor? _pdfGapAt(Offset point) {
+    final doc = widget.document;
+    if (doc.pdfAsset == null) return null;
+    for (final page in _pages(doc)) {
+      if (!page.bounds.contains(point)) continue;
+      for (final band in page.bands) {
+        if (point.dy >= band.bounds.bottom) continue;
+        // Starting inside an existing gap extends it from the bottom.
+        final y = math.max(point.dy, band.bounds.top);
+        final sourceY = band.toSource(Rect.fromLTWH(0, y, 0, 0)).top;
+        if (sourceY > 0 && sourceY < page.info.height) {
+          return (page: page.index, sourceY: sourceY, documentY: y);
+        }
+        return null;
+      }
     }
     return null;
   }
@@ -1435,6 +1523,25 @@ class InkCanvasState extends State<InkCanvas>
     if (crop != null && !crop.isEmpty) {
       _paintSelection(canvas, crop, handles: false);
     }
+    final gap = _gapAnchor;
+    if (gap != null && _gestureLast != null && _gestureOrigin != null) {
+      final y = gap.documentY;
+      final height = math.max(0.0, _gestureLast!.dy - _gestureOrigin!.dy);
+      const accent = Color(0xff128477);
+      canvas.drawRect(
+        Rect.fromLTWH(0, y, _paperWidth, height),
+        Paint()..color = accent.withValues(alpha: .18),
+      );
+      final line = Paint()
+        ..color = accent
+        ..strokeWidth = 1.5 / _zoom;
+      canvas.drawLine(Offset(0, y), Offset(_paperWidth, y), line);
+      canvas.drawLine(
+        Offset(0, y + height),
+        Offset(_paperWidth, y + height),
+        line,
+      );
+    }
     if (_laser.isNotEmpty && _laserFade.value < 1) {
       final opacity = 1 - _laserFade.value;
       final path = Path()..moveTo(_laser.first.dx, _laser.first.dy);
@@ -1708,33 +1815,36 @@ void _paintDocument(
     final pages = _pages(doc);
     for (final page in pages) {
       if (!view.overlaps(page.bounds)) continue;
-      canvas.save();
-      canvas.clipRect(page.bounds, doAntiAlias: false);
-      for (final region in doc.pdfRegions) {
-        if (region.page == page.index) {
-          final cut = page.fromSource(region.source);
+      final image = lookup(pdf, page.index);
+      final cuts = doc.pdfRegions.where((region) => region.page == page.index);
+      for (final band in page.bands) {
+        if (!view.overlaps(band.bounds)) continue;
+        canvas.save();
+        canvas.clipRect(band.bounds, doAntiAlias: false);
+        for (final region in cuts) {
+          final source = band.source.intersect(region.source);
+          if (source.isEmpty) continue;
           canvas.clipPath(
             Path.combine(
               ui.PathOperation.difference,
-              Path()..addRect(page.bounds),
-              Path()..addRect(cut),
+              Path()..addRect(band.bounds),
+              Path()..addRect(band.fromSource(source)),
             ),
             doAntiAlias: false,
           );
         }
+        if (image == null) {
+          canvas.drawRect(band.bounds, Paint()..color = Colors.white);
+        } else {
+          canvas.drawImageRect(
+            image,
+            _pdfImageSource(image, page.info, band.source),
+            band.bounds,
+            bitmapPaint,
+          );
+        }
+        canvas.restore();
       }
-      final image = lookup(pdf, page.index);
-      if (image == null) {
-        canvas.drawRect(page.bounds, Paint()..color = Colors.white);
-      } else {
-        canvas.drawImageRect(
-          image,
-          _imageRect(image),
-          page.bounds,
-          bitmapPaint,
-        );
-      }
-      canvas.restore();
     }
     for (final region in doc.pdfRegions) {
       if (region.page < 0 ||
@@ -1745,13 +1855,12 @@ void _paintDocument(
       final image = lookup(pdf, region.page);
       if (image == null) continue;
       final page = pages[region.page];
-      final source = Rect.fromLTRB(
-        region.source.left * image.width / page.info.width,
-        region.source.top * image.height / page.info.height,
-        region.source.right * image.width / page.info.width,
-        region.source.bottom * image.height / page.info.height,
+      canvas.drawImageRect(
+        image,
+        _pdfImageSource(image, page.info, region.source),
+        region.bounds,
+        bitmapPaint,
       );
-      canvas.drawImageRect(image, source, region.bounds, bitmapPaint);
     }
   }
   for (final picture in doc.images) {
@@ -1783,6 +1892,17 @@ void _paintDocument(
     paintInkStroke(canvas, stroke, view: view);
   }
   canvas.restore();
+}
+
+Rect _pdfImageSource(ui.Image image, PdfPageInfo page, Rect source) {
+  final x = image.width / page.width;
+  final y = image.height / page.height;
+  return Rect.fromLTRB(
+    source.left * x,
+    source.top * y,
+    source.right * x,
+    source.bottom * y,
+  );
 }
 
 Rect _imageRect(ui.Image bitmap) =>
