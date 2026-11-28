@@ -225,6 +225,43 @@ void main() {
     expect(isShapeEdgeDashed(edited, 6), isFalse);
     expect(isShapeEdgeDashed(edited, 0), isTrue);
   });
+
+  test(
+    'fountain widths vary with direction and survive cutting and loading',
+    () {
+      final input =
+          InkStrokeInput(const InkPoint(Offset.zero), kind: PenKind.fountain)
+            ..add(const InkPoint(Offset(50, 0)))
+            ..add(const InkPoint(Offset(50, 50)));
+      final stroke = InkStroke(
+        points: input.points,
+        color: ink,
+        width: 8,
+        kind: PenKind.fountain,
+      );
+      final restored = InkStroke.fromJson(
+        Map<String, dynamic>.from(stroke.toJson()),
+      );
+      expect(restored.kind, PenKind.fountain);
+      expect(
+        collectPressures(restored.points),
+        collectPressures(stroke.points),
+      );
+      final thin = inkWidth(restored, restored.points.first.pressure);
+      final wide = inkWidth(restored, restored.points.last.pressure);
+      expect(wide, greaterThan(thin));
+
+      final pieces = eraseStrokes(
+        [restored],
+        const Offset(25, -10),
+        const Offset(25, 10),
+        3,
+      );
+      expect(pieces, hasLength(2));
+      expect(inkWidth(pieces.first, pieces.first.points.last.pressure), thin);
+      expect(inkWidth(pieces.last, pieces.last.points.last.pressure), wide);
+    },
+  );
 }
 
 List<double> collectPressures(List<InkPoint> points) => [

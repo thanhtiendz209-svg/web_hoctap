@@ -7,6 +7,7 @@ import 'package:ink_study/assets.dart';
 import 'package:ink_study/canvas.dart';
 import 'package:ink_study/main.dart';
 import 'package:ink_study/model.dart';
+import 'package:ink_study/tool_shelf.dart';
 
 void main() {
   testWidgets(
@@ -70,7 +71,7 @@ void main() {
       expect(find.text('Xuất PDF'), findsNothing);
       expect(canvas().penKind, PenKind.ballpoint);
 
-      await tester.tap(find.byTooltip('Bút bi · màu và độ dày'));
+      await tester.tap(find.byTooltip('Chỉnh bút'));
       await tester.pumpAndSettle();
       expect(find.text('Màu tùy chỉnh'), findsOneWidget);
       await tester.tap(find.byTooltip('Đỏ'));
@@ -83,7 +84,18 @@ void main() {
       await tester.pumpAndSettle();
       expect(canvas().width, greaterThan(2.8));
 
-      await tester.tap(find.byTooltip('Bút chì'));
+      await tester.tap(
+        find.descendant(
+          of: find.byType(PenOptionsPanel),
+          matching: find.text('Bút mực'),
+        ),
+      );
+      await tester.pumpAndSettle();
+      expect(canvas().penKind, PenKind.fountain);
+      expect(canvas().width, 6.0);
+      await tester.tap(find.text('Bút chì'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Chỉnh bút'));
       await tester.pumpAndSettle();
       expect(canvas().penKind, PenKind.pencil);
       expect(find.text('Màu tùy chỉnh'), findsNothing);
@@ -113,12 +125,26 @@ void main() {
         findsOneWidget,
       );
       expect(find.byTooltip('Ẩn thư viện'), findsOneWidget);
-      await tester.tap(find.byTooltip('Bút bi'));
+      await tester.tap(find.byTooltip('Chỉnh bút'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Bút bi'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Chỉnh bút'));
       await tester.pumpAndSettle();
       expect(canvas().tool, Tool.pen);
       expect(canvas().penKind, PenKind.ballpoint);
       expect(canvas().color, const Color(0xffd54260));
       expect(canvas().dashed, isTrue);
+
+      await tester.tap(find.byTooltip('Độ rộng gôm'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('Lớn'));
+      await tester.pumpAndSettle();
+      expect(canvas().tool, Tool.eraser);
+      expect(canvas().eraserWidth, 48.0);
+      expect(find.text('48 px').hitTestable(), findsOneWidget);
+      await tester.tap(find.byTooltip('Độ rộng gôm'));
+      await tester.pumpAndSettle();
 
       await tester.tap(find.byTooltip('Hình học'));
       await tester.pumpAndSettle();

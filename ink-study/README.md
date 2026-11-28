@@ -5,8 +5,8 @@
 ## Sử dụng
 
 - Bấm **Ghi chú mới** hoặc dùng Ctrl+N. Kéo chuột trái hoặc dùng bút cảm ứng để viết. Lăn chuột để cuộn và giữ Ctrl khi lăn để thu phóng.
-- Bấm vào biểu tượng bút bi, bút chì hoặc bút đánh dấu để viết ngay. Mở mũi tên bên cạnh để xem màu, độ dày và nét đứt trên mẫu mực.
-- Dùng **Gôm** để cắt một đoạn nét viết. Quét qua cạnh đã vẽ để xóa cả hình.
+- Bấm vào biểu tượng bút để viết ngay. Mở mũi tên bên cạnh để chọn **Bút mực**, bút bi, bút chì hoặc dạ quang và xem trước màu, độ dày, nét đứt. Bút mực cho nét thanh đậm theo hướng viết và lực tay của bút cảm ứng hỗ trợ lực nhấn.
+- Dùng **Gôm** để cắt một đoạn nét viết. Quét qua cạnh đã vẽ để xóa cả hình. Mũi tên bên cạnh mở bảng chỉnh cỡ gôm từ 6 đến 72 px và các cỡ **Nhỏ, Vừa, Lớn**.
 - Bấm **Chọn vùng** hoặc giữ **Shift**, rồi kéo chuột trái từ khoảng trống để khoanh qua các nét, hình, ảnh hoặc vùng PDF đã tách. Kéo bên trong khung để di chuyển cả nhóm. Phím Delete xóa nhóm, Ctrl+Z hoàn tác và Ctrl+Y làm lại.
 - Dùng nút **−** và **□ / ❐** bên phải thanh công cụ để thu nhỏ, phóng to hoặc khôi phục cửa sổ. Nhấn **F11** để viết toàn màn hình và **F11** hoặc **Esc** để trở lại. Biểu tượng **Trình bày với laser** ở thanh dưới mở chế độ trình chiếu.
 - Dùng **Chèn → PDF làm nền**. Để chỉnh sơ đồ, chọn **Chèn → Chỉnh vùng PDF**, khoanh vùng trong một trang rồi chọn **Tách vùng**. Kéo cạnh khung để giãn theo một chiều.

@@ -263,6 +263,7 @@ class InkCanvas extends StatefulWidget {
     required this.zoom,
     required this.scroll,
     required this.onViewportChanged,
+    this.eraserWidth = defaultEraserWidth,
     this.panMode = false,
     this.onError,
     this.documentScope,
@@ -275,6 +276,7 @@ class InkCanvas extends StatefulWidget {
   final Tool tool;
   final Color color;
   final double width;
+  final double eraserWidth;
   final PenKind penKind;
   final bool dashed;
   final ShapeKind shapeKind;
@@ -318,6 +320,7 @@ class InkCanvasState extends State<InkCanvas>
   bool _assetFrameQueued = false;
   Offset? _gestureOrigin;
   Offset? _gestureLast;
+  Offset? _eraserCursor;
   int? _pointer;
   Tool? _gestureTool;
   InkDocument? _working;
@@ -583,7 +586,10 @@ class InkCanvasState extends State<InkCanvas>
     _working = null;
     switch (tool) {
       case Tool.pen:
-        final input = InkStrokeInput(InkPoint(point, _pressure(event)));
+        final input = InkStrokeInput(
+          InkPoint(point, _pressure(event)),
+          kind: widget.penKind,
+        );
         _strokeInput = input;
         _activeStroke = InkStroke(
           points: input.points,
@@ -593,6 +599,7 @@ class InkCanvasState extends State<InkCanvas>
           dashed: widget.dashed,
         );
       case Tool.eraser:
+        _eraserCursor = event.localPosition;
         _erase(point, point);
       case Tool.shape:
         _activeShape = InkShape(
@@ -646,6 +653,7 @@ class InkCanvasState extends State<InkCanvas>
       case Tool.pen:
         _strokeInput?.add(InkPoint(point, _pressure(event)));
       case Tool.eraser:
+        _eraserCursor = event.localPosition;
         _erase(last, point);
       case Tool.shape:
         _activeShape = _activeShape?.copyWith(end: point);
@@ -727,7 +735,14 @@ class InkCanvasState extends State<InkCanvas>
       setState(() => _pendingCrop = (page: page, crop: crop));
     }
     if (_gestureTool == Tool.laser) _laserFade.forward(from: 0);
+    final showEraser =
+        _gestureTool == Tool.eraser &&
+        widget.tool == Tool.eraser &&
+        event.kind != PointerDeviceKind.touch;
     _clearGesture();
+    if (showEraser && (Offset.zero & _size).contains(event.localPosition)) {
+      _eraserCursor = event.localPosition;
+    }
     if (update != null) _commit(update);
     if (selectedQuickly) widget.onQuickSelect?.call();
     _refresh();
@@ -750,6 +765,7 @@ class InkCanvasState extends State<InkCanvas>
     _activeShape = null;
     _gestureOrigin = null;
     _gestureLast = null;
+    _eraserCursor = null;
     _working = null;
     _cropPage = null;
     _cropPreview = null;
@@ -796,7 +812,7 @@ class InkCanvasState extends State<InkCanvas>
 
   void _erase(Offset start, Offset end) {
     final before = _document;
-    final radius = math.max(5.0, widget.width * 1.75);
+    final radius = widget.eraserWidth / (2 * _zoom);
     final strokes = eraseStrokes(before.strokes, start, end, radius);
     final shapes = eraseShapes(before.shapes, start, end, radius);
     if (!identical(before.strokes, strokes) ||
@@ -1358,7 +1374,7 @@ class InkCanvasState extends State<InkCanvas>
     final shape = _activeShape;
     final stroke = _activeStroke;
     if (shape != null) _paintShape(canvas, shape);
-    if (stroke != null) _paintStroke(canvas, stroke);
+    if (stroke != null) paintInkStroke(canvas, stroke);
     final rect = _selection?.bounds(doc);
     if (rect != null &&
         (widget.tool == Tool.select || widget.tool == Tool.pdfCrop)) {
@@ -1409,6 +1425,25 @@ class InkCanvasState extends State<InkCanvas>
       }
     }
     canvas.restore();
+    final eraserCursor = _eraserCursor;
+    if (eraserCursor != null &&
+        _isOnPaper(_toDocument(eraserCursor)) &&
+        (Offset.zero & size).contains(eraserCursor)) {
+      final radius = widget.eraserWidth / 2;
+      canvas.drawCircle(
+        eraserCursor,
+        radius,
+        Paint()..color = Colors.white.withValues(alpha: 0.55),
+      );
+      canvas.drawCircle(
+        eraserCursor,
+        radius,
+        Paint()
+          ..color = const Color(0xff344861)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 1,
+      );
+    }
   }
 
   void _paintSelection(Canvas canvas, Rect rect, {required bool handles}) {
@@ -1440,6 +1475,16 @@ class InkCanvasState extends State<InkCanvas>
             : SystemMouseCursors.precise;
         final paper = MouseRegion(
           cursor: cursor,
+          onHover: (event) {
+            if (widget.tool != Tool.eraser) return;
+            _eraserCursor = event.localPosition;
+            _refresh();
+          },
+          onExit: (_) {
+            if (_eraserCursor == null) return;
+            _eraserCursor = null;
+            if (mounted) _refresh();
+          },
           child: Listener(
             behavior: HitTestBehavior.opaque,
             onPointerDown: _pointerDown,
@@ -1601,7 +1646,7 @@ void _paintDocument(
   }
   for (final stroke in doc.strokes) {
     if (stroke.points.isEmpty) continue;
-    _paintStroke(canvas, stroke, view: view);
+    paintInkStroke(canvas, stroke, view: view);
   }
   canvas.restore();
 }
@@ -1664,7 +1709,7 @@ void _paintShape(Canvas canvas, InkShape shape) {
   }
 }
 
-void _paintStroke(Canvas canvas, InkStroke stroke, {Rect? view}) {
+void paintInkStroke(Canvas canvas, InkStroke stroke, {Rect? view}) {
   if (stroke.points.isEmpty) return;
   final firstPoint = stroke.points.first;
   final highlighter = stroke.kind == PenKind.highlighter;

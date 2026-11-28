@@ -129,6 +129,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
   final _filter = TextEditingController();
   final _pens = <PenKind, PenSettings>{
     PenKind.ballpoint: (_initialInk, 2.8, false),
+    PenKind.fountain: (const Color(0xff3474cf), 6.0, false),
     PenKind.pencil: (const Color(0xff4b637c), 2.0, false),
     PenKind.highlighter: (const Color(0xffefb531), 15.0, false),
   };
@@ -985,7 +986,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
             final toolWidth = (constraints.maxWidth - reserved)
                 .clamp(0.0, double.infinity)
                 .toDouble();
-            final showLabels = toolWidth >= 940;
+            final showLabels = toolWidth >= 760;
             final compact = toolWidth < 615;
             return Row(
               children: [
@@ -1008,13 +1009,22 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
                       ),
                       child: Row(
                         children: [
-                          for (final kind in PenKind.values)
-                            _penButton(
-                              kind,
-                              note,
-                              showLabel: showLabels,
-                              compact: compact,
-                            ),
+                          _penButton(
+                            note,
+                            showLabel: showLabels,
+                            compact: compact,
+                          ),
+                          if (toolWidth >= 920) ...[
+                            const SizedBox(width: 6),
+                            for (var index = 0; index < 5; index++)
+                              InkColorSwatch(
+                                color: _palette[index],
+                                label: 'Màu nhanh · ${_inkNames[index]}',
+                                selected: _pens[_pen]!.$1 == _palette[index],
+                                onTap: () =>
+                                    _setPen(_pen, color: _palette[index]),
+                              ),
+                          ],
                           _shelfDivider(),
                           _eraserButton(compact: compact),
                           if (compact)
@@ -1076,21 +1086,21 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
     'Than',
   ];
 
-  double _eraserSize = 20;
+  double _eraserSize = defaultEraserWidth;
 
   Widget _penButton(
-    PenKind kind,
     InkNote note, {
     required bool showLabel,
     required bool compact,
   }) {
     final scheme = Theme.of(context).colorScheme;
+    final kind = _pen;
     final (color, _, _) = _pens[kind]!;
     final label = penLabel(kind);
     return _shelfSplitTool(
       label: label,
       tooltip: label,
-      selected: _tool == Tool.pen && _pen == kind,
+      selected: _tool == Tool.pen,
       showLabel: showLabel,
       compact: compact,
       preview: ToolNibPreview(
@@ -1100,7 +1110,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       ),
       onPressed: () => _setPen(kind),
       options: ToolOptionsMenu(
-        label: '$label · màu và độ dày',
+        label: 'Chỉnh bút',
         panel: PenOptionsPanel(
           pen: kind,
           presets: _pens,
@@ -1128,21 +1138,12 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
       onPressed: () => _setTool(Tool.eraser),
       options: ToolOptionsMenu(
         label: 'Độ rộng gôm',
-        panel: SizedBox(
-          width: 222,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 13, 14, 0),
-            child: ToolWidthSlider(
-              label: 'Độ rộng gôm',
-              value: _eraserSize,
-              min: 6,
-              max: 54,
-              onChanged: (value) => setState(() {
-                _eraserSize = value;
-                _tool = Tool.eraser;
-              }),
-            ),
-          ),
+        panel: EraserOptionsPanel(
+          width: _eraserSize,
+          onChanged: (value) => setState(() {
+            _eraserSize = value;
+            _tool = Tool.eraser;
+          }),
         ),
       ),
     );
@@ -1168,7 +1169,7 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           side: BorderSide(
             color: selected
                 ? scheme.primary.withValues(alpha: 0.52)
-                : Colors.transparent,
+                : scheme.outlineVariant,
           ),
         ),
         clipBehavior: Clip.antiAlias,
@@ -1638,7 +1639,8 @@ class _StudyDeskState extends State<StudyDesk> with WindowListener {
           onChange: _document,
           tool: _tool,
           color: color,
-          width: _tool == Tool.eraser ? _eraserSize : width,
+          width: width,
+          eraserWidth: _eraserSize,
           penKind: _pen,
           dashed: dashed,
           shapeKind: _shape,

@@ -3,7 +3,7 @@ import 'dart:ui';
 
 enum PaperKind { blank, ruled, grid, dots }
 
-enum PenKind { ballpoint, pencil, highlighter }
+enum PenKind { ballpoint, fountain, pencil, highlighter }
 
 enum ShapeKind {
   line,
@@ -17,6 +17,10 @@ enum ShapeKind {
 }
 
 enum Tool { pen, eraser, select, shape, laser, hand, pdfCrop }
+
+const minEraserWidth = 6.0;
+const maxEraserWidth = 72.0;
+const defaultEraserWidth = 24.0;
 
 class InkPoint {
   const InkPoint(this.position, [this.pressure = 1]);
@@ -38,22 +42,42 @@ class InkPoint {
 /// Captures rounded ink samples once, so painting, saving and cutting share
 /// the same geometry. Each new event only changes the unfinished corner.
 class InkStrokeInput {
-  InkStrokeInput(InkPoint first) : points = [first], _latest = first;
+  InkStrokeInput(InkPoint first, {this.kind = PenKind.ballpoint})
+    : points = [first],
+      _lastPressure = first.pressure;
 
   final List<InkPoint> points;
+  final PenKind kind;
   InkPoint? _previous;
-  InkPoint _latest;
+  double _lastPressure;
 
-  double get lastPressure => _latest.pressure;
+  double get lastPressure => _lastPressure;
 
   void add(InkPoint next) {
-    final outgoing = next.position - _latest.position;
+    final outgoing = next.position - points.last.position;
     if (outgoing.distanceSquared < 0.0144) return;
+    var sample = next;
+    if (kind == PenKind.fountain) {
+      // A slanted nib lays down more ink across its edge than along it.
+      // Store this width factor with the point so cutting or moving it
+      // cannot change how the original stroke was drawn.
+      final across = _dot(
+        outgoing / outgoing.distance,
+        const Offset(0.5, 0.866),
+      ).abs().clamp(0.0, 1.0).toDouble();
+      InkPoint inkPoint(InkPoint point) => InkPoint(
+        point.position,
+        across * (0.45 + 0.55 * point.pressure.clamp(0.0, 1.0)),
+      );
+      if (_previous == null) points[0] = inkPoint(points.first);
+      sample = inkPoint(next);
+    }
+    final latest = points.last;
     final previous = _previous;
-    if (previous != null) _roundCorner(previous, _latest, next);
-    points.add(next);
-    _previous = _latest;
-    _latest = next;
+    if (previous != null) _roundCorner(previous, latest, sample);
+    points.add(sample);
+    _previous = latest;
+    _lastPressure = next.pressure;
   }
 
   void _roundCorner(InkPoint previous, InkPoint corner, InkPoint next) {
@@ -452,6 +476,9 @@ List<double> _rectData(Rect rect) => [
 double inkWidth(InkStroke stroke, double pressure) {
   if (stroke.kind == PenKind.highlighter) return stroke.width;
   final force = pressure.isFinite ? pressure.clamp(0.0, 1.0).toDouble() : 1.0;
+  if (stroke.kind == PenKind.fountain) {
+    return stroke.width * (0.24 + 0.76 * force);
+  }
   return stroke.width * (0.35 + 0.65 * force);
 }
 

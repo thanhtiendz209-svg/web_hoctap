@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import 'canvas.dart';
 import 'model.dart';
 
 typedef PenSettings = (Color, double, bool);
@@ -10,6 +11,7 @@ typedef PenSettingsChanged =
 
 String penLabel(PenKind kind) => switch (kind) {
   PenKind.ballpoint => 'Bút bi',
+  PenKind.fountain => 'Bút mực',
   PenKind.pencil => 'Bút chì',
   PenKind.highlighter => 'Dạ quang',
 };
@@ -69,6 +71,20 @@ class _NibPainter extends CustomPainter {
           ..drawLine(const Offset(-3, -6), const Offset(3, -6), edge)
           ..drawPath(grip, fill)
           ..drawPath(grip, edge);
+      case PenKind.fountain:
+        final nib = Path()
+          ..moveTo(-4.5, -4.2)
+          ..lineTo(4.5, -4.2)
+          ..lineTo(4.6, 2.2)
+          ..lineTo(0, 11.7)
+          ..lineTo(-4.6, 2.2)
+          ..close();
+        canvas
+          ..drawRRect(RRect.fromLTRBXY(-3.1, -10.8, 3.1, -4.2, 1.2, 1.2), edge)
+          ..drawPath(nib, fill..color = color.withValues(alpha: 0.24))
+          ..drawPath(nib, edge)
+          ..drawLine(const Offset(0, 10.5), const Offset(0, 2.5), edge)
+          ..drawCircle(const Offset(0, 1.2), 1.35, edge);
       case PenKind.pencil:
         final body = Path()
           ..moveTo(-3.3, -10)
@@ -232,13 +248,35 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
               const SizedBox(height: 7),
               Wrap(
                 spacing: 5,
+                runSpacing: 5,
                 children: [
                   for (final pen in PenKind.values)
-                    ChoiceChip(
-                      label: Text(penLabel(pen)),
-                      selected: _pen == pen,
-                      showCheckmark: false,
-                      onSelected: (_) => _change(pen: pen),
+                    SizedBox(
+                      width: 127,
+                      height: 37,
+                      child: Semantics(
+                        selected: _pen == pen,
+                        child: TextButton.icon(
+                          onPressed: () => _change(pen: pen),
+                          icon: ToolNibPreview(
+                            pen: pen,
+                            color: widget.presets[pen]!.$1,
+                            outline: scheme.onSurface,
+                          ),
+                          label: Text(penLabel(pen)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: scheme.onSurface,
+                            backgroundColor: _pen == pen
+                                ? scheme.primaryContainer
+                                : scheme.surfaceContainerLow,
+                            padding: const EdgeInsets.symmetric(horizontal: 6),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                              side: BorderSide(color: scheme.outlineVariant),
+                            ),
+                          ),
+                        ),
+                      ),
                     ),
                 ],
               ),
@@ -265,7 +303,7 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
               spacing: 5,
               children: [
                 for (var index = 0; index < widget.colors.length; index++)
-                  _ColorSwatch(
+                  InkColorSwatch(
                     color: widget.colors[index],
                     label: widget.colorNames[index],
                     selected: color == widget.colors[index],
@@ -304,8 +342,9 @@ class _PenOptionsPanelState extends State<PenOptionsPanel> {
   }
 }
 
-class _ColorSwatch extends StatelessWidget {
-  const _ColorSwatch({
+class InkColorSwatch extends StatelessWidget {
+  const InkColorSwatch({
+    super.key,
     required this.color,
     required this.label,
     required this.selected,
@@ -373,6 +412,7 @@ class ToolWidthSlider extends StatelessWidget {
     required this.min,
     required this.max,
     required this.onChanged,
+    this.divisions,
   });
 
   final String label;
@@ -380,6 +420,7 @@ class ToolWidthSlider extends StatelessWidget {
   final double min;
   final double max;
   final ValueChanged<double> onChanged;
+  final int? divisions;
 
   @override
   Widget build(BuildContext context) {
@@ -398,6 +439,7 @@ class ToolWidthSlider extends StatelessWidget {
           value: value.clamp(min, max).toDouble(),
           min: min,
           max: max,
+          divisions: divisions,
           label: '$shown px',
           semanticFormatterCallback: (value) =>
               '$label ${value.toStringAsFixed(1)} px',
@@ -406,6 +448,116 @@ class ToolWidthSlider extends StatelessWidget {
       ],
     );
   }
+}
+
+class EraserOptionsPanel extends StatelessWidget {
+  const EraserOptionsPanel({
+    super.key,
+    required this.width,
+    required this.onChanged,
+  });
+
+  final double width;
+  final ValueChanged<double> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheme = Theme.of(context).colorScheme;
+    return SizedBox(
+      width: 260,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Chỉnh gôm', style: Theme.of(context).textTheme.titleSmall),
+            const SizedBox(height: 8),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: scheme.surfaceContainerLow,
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: scheme.outlineVariant),
+              ),
+              child: CustomPaint(
+                size: const Size(double.infinity, 84),
+                painter: _EraserPreview(
+                  width,
+                  scheme.surfaceContainerLow,
+                  scheme.onSurfaceVariant,
+                  scheme.primary,
+                ),
+              ),
+            ),
+            const SizedBox(height: 9),
+            ToolWidthSlider(
+              label: 'Độ rộng gôm',
+              value: width,
+              min: minEraserWidth,
+              max: maxEraserWidth,
+              divisions: (maxEraserWidth - minEraserWidth).toInt(),
+              onChanged: onChanged,
+            ),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (final (label, size) in [
+                  ('Nhỏ', 12.0),
+                  ('Vừa', defaultEraserWidth),
+                  ('Lớn', 48.0),
+                ])
+                  ChoiceChip(
+                    label: Text(label),
+                    tooltip: '${size.toInt()} px',
+                    showCheckmark: false,
+                    selected: width == size,
+                    onSelected: (_) => onChanged(size),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _EraserPreview extends CustomPainter {
+  const _EraserPreview(this.width, this.background, this.ink, this.outline);
+
+  final double width;
+  final Color background;
+  final Color ink;
+  final Color outline;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    canvas.drawLine(
+      Offset(18, center.dy + 11),
+      Offset(size.width - 18, center.dy - 11),
+      Paint()
+        ..color = ink
+        ..strokeWidth = 3.5
+        ..strokeCap = StrokeCap.round,
+    );
+    canvas.drawCircle(center, width / 2, Paint()..color = background);
+    canvas.drawCircle(
+      center,
+      width / 2,
+      Paint()
+        ..color = outline
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 1,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_EraserPreview oldDelegate) =>
+      width != oldDelegate.width ||
+      background != oldDelegate.background ||
+      ink != oldDelegate.ink ||
+      outline != oldDelegate.outline;
 }
 
 class _StrokePreview extends CustomPainter {
@@ -418,52 +570,30 @@ class _StrokePreview extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color.withValues(
-        alpha: switch (kind) {
-          PenKind.ballpoint => 1,
-          PenKind.pencil => 0.78,
-          PenKind.highlighter => 0.32,
-        },
-      )
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeWidth = width;
     final inset = math.max(13.0, width / 2 + 6);
     final span = size.width - inset * 2;
     if (span <= 0) return;
-    final center = size.height / 2;
-    final stroke = Path()
-      ..moveTo(inset, center + 4)
-      ..cubicTo(
-        inset + span * 0.20,
-        center - 12,
-        inset + span * 0.32,
-        center + 11,
-        inset + span * 0.49,
-        center + 2,
-      )
-      ..cubicTo(
-        inset + span * 0.66,
-        center - 11,
-        inset + span * 0.75,
-        center + 12,
-        size.width - inset,
-        center - 3,
-      );
-    if (!dashed) {
-      canvas.drawPath(stroke, paint);
-      return;
+    final amplitude = math.min(11.0, (size.height - width) / 2 - 3);
+    InkPoint sample(double t) => InkPoint(
+      Offset(
+        inset + span * t,
+        size.height / 2 - amplitude * math.sin(t * math.pi * 3),
+      ),
+    );
+    final input = InkStrokeInput(sample(0), kind: kind);
+    for (var index = 1; index <= 48; index++) {
+      input.add(sample(index / 48));
     }
-    final dash = math.max(5.0, width * 3);
-    final cycle = dash + math.max(3.0, width * 2);
-    final metric = stroke.computeMetrics().first;
-    for (var offset = 0.0; offset < metric.length; offset += cycle) {
-      canvas.drawPath(
-        metric.extractPath(offset, math.min(offset + dash, metric.length)),
-        paint,
-      );
-    }
+    paintInkStroke(
+      canvas,
+      InkStroke(
+        points: input.points,
+        color: color,
+        width: width,
+        kind: kind,
+        dashed: dashed,
+      ),
+    );
   }
 
   @override
