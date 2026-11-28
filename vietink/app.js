@@ -1,4 +1,4 @@
-import { createEditor } from './editor.js?v=0.3.0';
+import { createEditor } from './editor.js?v=0.4.0';
 
 const icons = {
   new: '<path d="M12 19H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h8l4 4v4m-5-8v5h5m0 5v7m-3.5-3.5h7"/>',

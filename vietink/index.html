@@ -6,10 +6,12 @@
   <meta name="theme-color" content="#f6f9fa">
   <meta name="description" content="Ghi chú viết tay, vẽ hình và khoanh vùng trên trang giấy của Ink Study.">
   <title>Ink Study</title>
+  <link rel="manifest" href="./manifest.webmanifest">
   <link rel="icon" href="./icons/favicon.ico">
   <link rel="apple-touch-icon" href="./icons/app-icon.png">
-  <link rel="stylesheet" href="./editor.css?v=0.3.1">
-  <script type="module" src="./app.js?v=0.3.1"></script>
+  <link rel="stylesheet" href="./editor.css?v=0.4.0">
+  <script defer src="./install.js?v=0.4.0"></script>
+  <script type="module" src="./app.js?v=0.4.0"></script>
 </head>
 <body>
   <nav class="ribbon" aria-label="Công cụ viết và vẽ">
@@ -70,6 +72,11 @@
       </div>
       <div class="tool-group document-actions">
         <button class="tool icon-only" id="new" data-icon="new" title="Tạo ghi chú" aria-label="Tạo ghi chú"></button>
+        <button class="tool icon-only" id="install" type="button" title="Cài Ink Study" aria-label="Cài Ink Study" hidden>
+          <svg viewBox="0 0 24 24" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M11 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-5m-10 3h6m1-14v9m-4-4 4 4 4-4"/>
+          </svg>
+        </button>
         <button class="tool icon-only" id="fullscreen" data-icon="fullscreen" title="Toàn màn hình" aria-label="Toàn màn hình"></button>
         <button class="tool icon-only" id="export" data-icon="download" title="Xuất PNG" aria-label="Xuất PNG"></button>
       </div>

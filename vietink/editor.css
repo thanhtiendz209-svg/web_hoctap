@@ -237,7 +237,7 @@ svg { display: block; flex: none; }
   .document-actions { padding-left: .22rem; }
   .note-title { padding-inline: .3rem; }
 }
-@media (max-width: 395px) {
+@media (max-width: 425px) {
   .paper-picker span:last-child { display: none; }
   .paper-picker select { min-width: 0; width: 2rem; padding: 0; color: transparent; }
   .paper-picker option { color: #20333e; }

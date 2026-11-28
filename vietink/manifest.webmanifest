@@ -1,0 +1,32 @@
+{
+  "name": "Ink Study",
+  "short_name": "Ink Study",
+  "description": "Ghi chú viết tay, vẽ hình và khoanh vùng trên trang giấy của Ink Study.",
+  "lang": "vi",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "theme_color": "#f6f9fa",
+  "background_color": "#f6f9fa",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "./icons/app-icon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/app-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/app-icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
